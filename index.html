@@ -156,13 +156,17 @@
   .cq{font-size:clamp(20px,4.4vw,28px);font-weight:800;text-align:center;line-height:1.4}
   .cq .sw{font-size:1.3em;vertical-align:-3px}
   .cgrid{display:grid;grid-template-columns:repeat(3, min(190px,28vw));gap:14px}
-  .cflag{position:relative;border-radius:14px;overflow:hidden;cursor:pointer;
-    box-shadow:0 4px 10px rgba(0,0,0,.16)}
+  .citem{cursor:pointer}
+  .citem.bad{animation:shake .45s}
+  .cflag{position:relative;border-radius:14px;overflow:hidden;
+    box-shadow:0 4px 10px rgba(0,0,0,.16);transition:transform .15s}
   .cflag img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
-  .cflag.got{box-shadow:0 0 0 5px #25c26e;transform:scale(1.04)}
-  .cflag.got::after{content:'✓';position:absolute;right:6px;top:2px;font-size:26px;color:#25c26e;
-    text-shadow:0 1px 3px #fff,0 0 6px #fff}
-  .cflag.bad{animation:shake .45s}
+  .citem.got .cflag{box-shadow:0 0 0 5px #25c26e;transform:scale(1.04)}
+  .citem.got .cflag::after{content:'✓';position:absolute;right:6px;top:2px;font-size:26px;
+    color:#25c26e;text-shadow:0 1px 3px #fff,0 0 6px #fff}
+  .cnm{font-size:clamp(13px,2.6vw,17px);font-weight:800;text-align:center;
+    margin-top:7px;color:#3a4658;line-height:1.25}
+  .citem.got .cnm{color:#1ea75d}
 
   /* ── 동물 지도 ── */
   .animal{position:absolute;left:0;top:0;z-index:4;will-change:transform;pointer-events:none;
@@ -863,7 +867,9 @@ function nextColor(){
   const all = shuffle([...yes, ...no]);
   const g = $('cgrid');
   g.innerHTML = all.map((c, i) =>
-    '<div class="cflag" data-i="' + i + '"><img src="' + flagSrc(c) + '" alt=""></div>').join('');
+    '<div class="citem" data-i="' + i + '">'
+    + '<div class="cflag"><img src="' + flagSrc(c) + '" alt=""></div>'
+    + '<div class="cnm">' + c.ko + '</div></div>').join('');
   [...g.children].forEach(el => el.onclick = () => {
     if(cLock) return;
     const c = all[+el.dataset.i];
