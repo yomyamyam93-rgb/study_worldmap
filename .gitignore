@@ -6,3 +6,6 @@ assets/voice_backup/
 
 # 작업 중 생긴 기록
 tools/voice-log.txt
+
+# 나라 이름 듣기용 사본 (원본은 assets/voice 에 있음)
+나라이름듣기/

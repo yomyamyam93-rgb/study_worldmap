@@ -17,12 +17,15 @@
   html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;
     font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
     user-select:none;-webkit-user-select:none;background:#e9f3fa;color:#1e2530;touch-action:none}
-  #app{height:100%;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+  #app{position:relative;height:100%;overflow:hidden}
   .hidden{display:none!important}
 
-  /* ── 상단 ── */
-  .top{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 16px}
-  .title{font-size:21px;font-weight:800}
+  /* ── 상단 (지도 위에 얹힘) ── */
+  .top{position:absolute;top:env(safe-area-inset-top);left:0;right:0;z-index:12;
+    height:60px;display:flex;align-items:center;gap:10px;padding:0 14px;pointer-events:none}
+  .top > *{pointer-events:auto}
+  .title{font-size:20px;font-weight:800;background:rgba(255,255,255,.82);
+    border-radius:20px;padding:7px 15px;box-shadow:0 2px 8px rgba(0,0,0,.13)}
   .sp{flex:1}
   .tbtn{background:#fff;color:#41506a;border:0;border-radius:22px;padding:10px 18px;
     font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 3px 9px rgba(0,0,0,.13)}
@@ -31,10 +34,8 @@
   .stars{font-size:17px;font-weight:800;color:#f5a623}
 
   /* ── 지도 ── */
-  #mapScreen{flex:1;display:flex;align-items:center;justify-content:center;padding:0 12px 12px;min-height:0}
-  .stagebox{position:relative;width:100%;max-width:calc((100vh - 90px) * 2);aspect-ratio:2/1;
-    max-height:100%;border-radius:22px;overflow:hidden;background:#a9d9f0;
-    box-shadow:0 8px 24px rgba(30,50,80,.16)}
+  #mapScreen{position:absolute;inset:0;min-height:0}
+  .stagebox{position:absolute;inset:0;overflow:hidden;background:#a9d9f0}
   #map{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
   #map.drag{cursor:grabbing}
 
@@ -104,8 +105,9 @@
   .ghost{background:#eef1f6;color:#5b6678}
 
   /* ── 놀이 ── */
-  #quizScreen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:20px;padding:10px 20px 24px;min-height:0}
+  #quizScreen{position:absolute;inset:0;z-index:15;background:#eaf3fb;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:18px;padding:80px 20px 24px;min-height:0;overflow:auto}
   .prog{font-size:16px;color:#7b8798;font-weight:700}
   .qsub{font-size:72px;line-height:1}
   .qtext{font-size:28px;font-weight:800;text-align:center;line-height:1.35}
@@ -115,6 +117,11 @@
   .opt img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
   .opt.ok{border-color:#25c26e;background:#eafbf1;transform:scale(1.06)}
   .opt.no{animation:shake .45s}
+  .bigbtn{border:0;border-radius:26px;padding:16px 30px;font-size:20px;font-weight:800;
+    cursor:pointer;box-shadow:0 5px 14px rgba(0,0,0,.18)}
+  .bigbtn.go{background:#ffb01f;color:#fff}
+  .bigbtn.back{background:#fff;color:#5b6678}
+  .bigbtn:active{transform:scale(.95)}
   @keyframes shake{25%{transform:translateX(-11px)}75%{transform:translateX(11px)}}
   .confetti{position:fixed;top:-30px;width:13px;height:19px;border-radius:3px;pointer-events:none;z-index:60}
 </style>
@@ -205,8 +212,9 @@ const SHAPES = WORLD.map(w => ({ id: w.id, path: new Path2D(w.d), fb: w.fb }));
 
 const COL = { sea:'#a9d9f0', land:'#cfe8b8', line:'#8fbc72', sel:'#ffd166', selLine:'#dd9c22' };
 
-const cam = { x:23, y:9, k:1.15 };
-const K_MIN = 1.05, K_MAX = 40;
+/* 카메라 —  x,y = 화면 왼쪽 위가 가리키는 세계 좌표,  s = 세계 1칸이 몇 픽셀인지.
+   화면이 가로로 길든 세로로 길든 똑같이 동작합니다. */
+const cam = { x:0, y:0, s:1 };
 let selected = null;
 let BW = 0, BH = 0;
 
@@ -215,17 +223,20 @@ function measure(){
   cv.width = Math.max(1, Math.round(BW * DPR));
   cv.height = Math.max(1, Math.round(BH * DPR));
 }
+const fitScale = () => Math.min(BW/360, BH/180) || 1;   // 세계 전체가 들어가는 크기
+const zoom = () => cam.s / fitScale();                  // 몇 배로 확대했는지
+
 function clampCam(){
-  cam.k = Math.min(K_MAX, Math.max(K_MIN, cam.k));
-  const vw = 360/cam.k, vh = 180/cam.k;
-  cam.x = Math.min(360 - vw, Math.max(0, cam.x));
-  cam.y = Math.min(180 - vh, Math.max(0, cam.y));
+  const min = fitScale();
+  cam.s = Math.min(min * 40, Math.max(min, cam.s));
+  const vw = BW/cam.s, vh = BH/cam.s;
+  cam.x = vw >= 360 ? (360 - vw)/2 : Math.min(360 - vw, Math.max(0, cam.x));
+  cam.y = vh >= 180 ? (180 - vh)/2 : Math.min(180 - vh, Math.max(0, cam.y));
 }
-// 세계 좌표 → 화면(캔버스 픽셀) 변환값
-function scaleNow(){ return BW / (360/cam.k) * DPR; }
+function resetCam(){ cam.s = fitScale(); cam.x = 0; cam.y = 0; clampCam(); }
 
 function drawMap(){
-  const s = scaleNow();
+  const s = cam.s * DPR;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = COL.sea;
   ctx.fillRect(0, 0, cv.width, cv.height);
@@ -233,7 +244,7 @@ function drawMap(){
   ctx.lineJoin = 'round';
   ctx.lineWidth = 0.7 / s * DPR;              // 확대해도 선 굵기 그대로
   ctx.strokeStyle = COL.line;
-  const vw = 360/cam.k, vh = 180/cam.k;
+  const vw = BW/cam.s, vh = BH/cam.s;
   for(const sh of SHAPES){
     const f = sh.fb;                            // 화면 밖 나라는 건너뛴다
     if(f[2] < cam.x || f[0] > cam.x + vw || f[3] < cam.y || f[1] > cam.y + vh) continue;
@@ -280,28 +291,30 @@ function render(){
   clampCam();
   if(!BW) measure();
   drawMap();
-  const vw = 360/cam.k, vh = 180/cam.k;
+  const z = zoom();
   places.forEach((d, id) => {
     const pl = PLACE_BY.get(id);
-    const sx = (pl.p[0] - cam.x) / vw * BW, sy = (pl.p[1] - cam.y) / vh * BH;
-    const out = sx < -80 || sy < -30 || sx > BW + 80 || sy > BH + 30;
+    const sx = (pl.p[0] - cam.x) * cam.s, sy = (pl.p[1] - cam.y) * cam.s;
+    const w = d.firstChild.offsetWidth / 2 + 6, h = 16;
+    // 글자가 화면 밖으로 잘리면 아예 감춥니다
+    const out = sx - w < 2 || sy - h < 2 || sx + w > BW - 2 || sy + h > BH - 2;
     d.style.display = out ? 'none' : '';
     if(!out){ d._sx = sx; d._sy = sy;
       d.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0)'; }
   });
   pins.forEach((p, id) => {
     const c = BY.get(id);
-    const sx = (c.p[0] - cam.x) / vw * BW, sy = (c.p[1] - cam.y) / vh * BH;
-    const out = sx < -34 || sy < -34 || sx > BW + 34 || sy > BH + 34;
-    const wide = c.b ? (c.b[2] - c.b[0]) / vw * BW : 0;
-    const show = !out && (p.dataset.feat === '1' || wide >= 34 || cam.k >= 2.2 || id === selected);
+    const sx = (c.p[0] - cam.x) * cam.s, sy = (c.p[1] - cam.y) * cam.s;
+    const out = sx < 16 || sy < 14 || sx > BW - 16 || sy > BH - 14;
+    const wide = c.b ? (c.b[2] - c.b[0]) * cam.s : 0;
+    const show = !out && (p.dataset.feat === '1' || wide >= 34 || z >= 2.2 || id === selected);
     if(!show){ if(p.style.display !== 'none') p.style.display = 'none'; return; }
     if(p.style.display === 'none') p.style.display = '';
     p._sx = sx; p._sy = sy;                       // 국기 누름 판정에 씀
     p.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0)';
   });
   placeLabels();
-  $('resetBtn').classList.toggle('hidden', cam.k < 1.5);
+  $('resetBtn').classList.toggle('hidden', z < 1.15);
 }
 
 function placeLabels(){
@@ -338,25 +351,25 @@ function scheduleRender(){
 }
 
 let anim = null, animEnd = null;
-function flyTo(tx, ty, tk, ms){
+function flyTo(tx, ty, ts, ms){
   if(anim) cancelAnimationFrame(anim);
   if(animEnd) clearTimeout(animEnd);
   if(typeof stopGlide === 'function') stopGlide();
-  const s = { ...cam }, t0 = performance.now(), dur = ms || 620;
+  const from = { ...cam }, t0 = performance.now(), dur = ms || 520;
   let done = false;
   (function step(now){
     const r = Math.min(1, (now - t0) / dur);
     const e = 1 - Math.pow(1 - r, 3);
-    cam.x = s.x + (tx - s.x) * e;
-    cam.y = s.y + (ty - s.y) * e;
-    cam.k = s.k + (tk - s.k) * e;
+    cam.x = from.x + (tx - from.x) * e;
+    cam.y = from.y + (ty - from.y) * e;
+    cam.s = from.s + (ts - from.s) * e;
     render();
     if(r < 1) anim = requestAnimationFrame(step); else done = true;
   })(performance.now());
   animEnd = setTimeout(() => {                  // 애니메이션이 멈춰도 목적지에 도착하게
     if(done) return;
     if(anim) cancelAnimationFrame(anim);
-    cam.x = tx; cam.y = ty; cam.k = tk; render();
+    cam.x = tx; cam.y = ty; cam.s = ts; render();
   }, dur + 80);
 }
 /* ================= 손가락 조작 ================= */
@@ -384,9 +397,8 @@ function glide(){
 
 function worldAt(clientX, clientY){
   const r = box.getBoundingClientRect();
-  const vw = 360/cam.k, vh = 180/cam.k;
-  return { x: cam.x + (clientX - r.left)/r.width * vw,
-           y: cam.y + (clientY - r.top)/r.height * vh };
+  return { x: cam.x + (clientX - r.left) / cam.s,
+           y: cam.y + (clientY - r.top)  / cam.s };
 }
 // 국기를 눌렀는지 먼저 본다 (국기 주변 넉넉하게 인정 — 아이 손가락 기준)
 function pinAt(clientX, clientY){
@@ -416,7 +428,7 @@ function placeAt(clientX, clientY){
 function countryAt(clientX, clientY){
   const r = box.getBoundingClientRect();
   const px = (clientX - r.left) * DPR, py = (clientY - r.top) * DPR;
-  const s = scaleNow();
+  const s = cam.s * DPR;
   ctx.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
   for(let i = SHAPES.length - 1; i >= 0; i--){
     if(ctx.isPointInPath(SHAPES[i].path, px, py)) return SHAPES[i].id;
@@ -432,7 +444,7 @@ box.addEventListener('pointerdown', e => {
   cv.classList.add('drag');
   if(ptrs.size === 2){
     const [a,b] = [...ptrs.values()];
-    startDist = Math.hypot(a.x-b.x, a.y-b.y); startK = cam.k;
+    startDist = Math.hypot(a.x-b.x, a.y-b.y); startK = cam.s;
     startMid = worldAt((a.x+b.x)/2, (a.y+b.y)/2);
   }
 });
@@ -446,13 +458,12 @@ box.addEventListener('pointermove', e => {
 
   if(ptrs.size === 2 && startDist){
     const [a,b] = [...ptrs.values()];
-    cam.k = startK * (Math.hypot(a.x-b.x, a.y-b.y) / startDist);
+    cam.s = startK * (Math.hypot(a.x-b.x, a.y-b.y) / startDist);
     clampCam();
     const mid = worldAt((a.x+b.x)/2, (a.y+b.y)/2);
     cam.x += startMid.x - mid.x; cam.y += startMid.y - mid.y;
   } else if(ptrs.size === 1){
-    const r = box.getBoundingClientRect();
-    const wdx = dx / r.width * (360/cam.k), wdy = dy / r.height * (180/cam.k);
+    const wdx = dx / cam.s, wdy = dy / cam.s;
     cam.x -= wdx; cam.y -= wdy;
     const now = performance.now();                 // 미끄러짐에 쓸 속도 기록
     const gap = Math.max(8, now - lastMoveT);
@@ -477,14 +488,18 @@ box.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); startDist
 box.addEventListener('wheel', e => {                 // 컴퓨터에서 확인용
   e.preventDefault();
   const before = worldAt(e.clientX, e.clientY);
-  cam.k *= e.deltaY < 0 ? 1.15 : 1/1.15;
+  cam.s *= e.deltaY < 0 ? 1.15 : 1/1.15;
   clampCam();
   const after = worldAt(e.clientX, e.clientY);
   cam.x += before.x - after.x; cam.y += before.y - after.y;
   scheduleRender();
 }, { passive:false });
 
-$('resetBtn').onclick = () => { clearSel(); flyTo(23, 9, 1.15); };
+$('resetBtn').onclick = () => {
+  clearSel();
+  const s = fitScale(), vw = BW/s, vh = BH/s;
+  flyTo((360-vw)/2, (180-vh)/2, s);
+};
 window.addEventListener('resize', () => { measure(); render(); });
 
 /* ================= 나라 고르기 ================= */
@@ -598,13 +613,14 @@ const shuffle = a => { for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.ran
 // 놀이는 아이가 알 만한 나라에서만 출제 (목록은 extra.js 의 QUIZ_CC)
 const QUIZ_POOL = COUNTRIES.filter(c => QUIZ_CC.indexOf(c.cc) >= 0);
 
-$('quizBtn').onclick = () => {
+function startQuiz(){
   qList = shuffle([...QUIZ_POOL]).slice(0,5); qNo = 0;
   $('mapScreen').classList.add('hidden'); $('quizScreen').classList.remove('hidden');
   $('quizBtn').classList.add('hidden');    $('mapBtn').classList.remove('hidden');
   $('title').textContent = '🎯 나라 찾기 놀이';
   nextQ();
-};
+}
+$('quizBtn').onclick = startQuiz;
 $('mapBtn').onclick = () => {
   $('quizScreen').classList.add('hidden'); $('mapScreen').classList.remove('hidden');
   $('mapBtn').classList.add('hidden');     $('quizBtn').classList.remove('hidden');
@@ -652,7 +668,11 @@ function finishQuiz(){
   stars++; localStorage.setItem('wm-stars', stars); drawStars();
   $('qprog').textContent = ''; $('qsub').textContent = '🎉';
   $('qtext').innerHTML = '다 맞혔어요!<br>⭐ 별을 하나 받았어요';
-  $('qopts').innerHTML = '';
+  $('qopts').innerHTML =
+    '<button class="bigbtn go" id="againBtn">🎯 더 풀기</button>' +
+    '<button class="bigbtn back" id="doneBtn">🌍 지도로</button>';
+  $('againBtn').onclick = startQuiz;
+  $('doneBtn').onclick  = () => $('mapBtn').onclick();
   say('참 잘했어요! 별을 하나 받았어요', 'ko-KR', 'praise');
   confetti();
 }
@@ -670,6 +690,7 @@ function confetti(){
 
 drawStars();
 measure();
+resetCam();
 render();
 setTimeout(() => { $('zoomhint').style.opacity = 0; }, 6000);
 </script>
