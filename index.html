@@ -124,6 +124,18 @@
   .bigbtn:active{transform:scale(.95)}
   @keyframes shake{25%{transform:translateX(-11px)}75%{transform:translateX(11px)}}
   .confetti{position:fixed;top:-30px;width:13px;height:19px;border-radius:3px;pointer-events:none;z-index:60}
+
+  /* 정답을 맞혔을 때 국기를 크게 보여주는 화면 */
+  .answer{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:rgba(238,247,255,0);transition:background .22s;pointer-events:none}
+  .answer.on{background:rgba(238,247,255,.94)}
+  .abox{text-align:center;opacity:0;transform:scale(.55);
+    transition:transform .34s cubic-bezier(.2,1.5,.4,1), opacity .2s}
+  .answer.on .abox{opacity:1;transform:scale(1)}
+  .abox img{width:min(330px,64vw);aspect-ratio:4/3;object-fit:cover;display:block;margin:0 auto 18px;
+    box-shadow:0 12px 32px rgba(0,0,0,.3)}
+  .abox b{font-size:clamp(30px,7vw,46px);font-weight:900;display:block}
+  .abox .ok{font-size:20px;color:#25c26e;font-weight:800;margin-top:8px;display:block}
 </style>
 </head>
 <body>
@@ -676,14 +688,32 @@ function nextQ(){
       if(locked) return;
       if(o.id === c.id){
         locked = true; d.classList.add('ok');
-        say(c.ko + ', 정답이에요!', 'ko-KR', 'ok_' + c.cc);
-        qNo++; setTimeout(nextQ, 1400);
+        showAnswer(c);
+        qNo++; setTimeout(nextQ, 2900);
       } else {
         d.classList.add('no'); setTimeout(() => d.classList.remove('no'), 500);
       }
     };
     bx.appendChild(d);
   });
+}
+
+/* 정답! — 국기를 크게 띄우고, 칭찬한 뒤 나라 이름을 한 번 더 들려줍니다 */
+function showAnswer(c){
+  const el = document.createElement('div');
+  el.className = 'answer';
+  el.innerHTML = '<div class="abox"><img src="' + flagSrc(c) + '" alt="' + c.ko + ' 국기">'
+    + '<b>' + c.ko + '</b><span class="ok">정답이에요!</span></div>';
+  document.body.appendChild(el);
+  setTimeout(() => el.classList.add('on'), 16);
+
+  say(c.ko + ', 정답이에요!', 'ko-KR', 'ok_' + c.cc,
+      () => setTimeout(() => say(c.ko, 'ko-KR', 'name_' + c.cc), 250));
+
+  setTimeout(() => {
+    el.classList.remove('on');
+    setTimeout(() => el.remove(), 320);
+  }, 2500);
 }
 
 function finishQuiz(){
