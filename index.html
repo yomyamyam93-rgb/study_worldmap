@@ -21,7 +21,8 @@
   .hidden{display:none!important}
 
   /* ── 상단 (지도 위에 얹힘) ── */
-  .top{position:absolute;top:env(safe-area-inset-top);left:0;right:0;z-index:12;
+  /* z-index 18 — 놀이 화면(15)보다 위에 있어야 '그만하기' 버튼을 누를 수 있습니다 */
+  .top{position:absolute;top:env(safe-area-inset-top);left:0;right:0;z-index:18;
     height:60px;display:flex;align-items:center;gap:10px;padding:0 14px;pointer-events:none}
   .top > *{pointer-events:auto}
   .title{font-size:20px;font-weight:800;background:rgba(255,255,255,.82);
@@ -124,7 +125,7 @@
   /* ── 짝 맞추기 ── */
   #matchScreen{position:absolute;inset:0;z-index:15;background:#eaf3fb;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:14px;padding:78px 14px 18px;overflow:auto}
+    gap:14px;padding:calc(env(safe-area-inset-top) + 74px) 14px 18px;overflow:auto}
   .mgrid{display:grid;gap:10px}
   .mcard{position:relative;aspect-ratio:4/3;border-radius:14px;cursor:pointer;
     background:#2e9bff;box-shadow:0 4px 10px rgba(0,0,0,.16);overflow:hidden}
@@ -151,7 +152,7 @@
   /* ── 색깔 찾기 ── */
   #colorScreen{position:absolute;inset:0;z-index:15;background:#eaf3fb;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:16px;padding:78px 14px 18px;overflow:auto}
+    gap:16px;padding:calc(env(safe-area-inset-top) + 74px) 14px 18px;overflow:auto}
   .cq{font-size:clamp(20px,4.4vw,28px);font-weight:800;text-align:center;line-height:1.4}
   .cq .sw{font-size:1.3em;vertical-align:-3px}
   .cgrid{display:grid;grid-template-columns:repeat(3, min(190px,28vw));gap:14px}
@@ -201,7 +202,7 @@
   /* ── 놀이 ── */
   #quizScreen{position:absolute;inset:0;z-index:15;background:#eaf3fb;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:18px;padding:80px 20px 24px;min-height:0;overflow:auto}
+    gap:18px;padding:calc(env(safe-area-inset-top) + 74px) 20px 24px;min-height:0;overflow:auto}
   .prog{font-size:16px;color:#7b8798;font-weight:700}
   .qsub{font-size:72px;line-height:1}
   .qtext{font-size:28px;font-weight:800;text-align:center;line-height:1.35}
@@ -239,7 +240,7 @@
     <div class="sp"></div>
     <div class="stars" id="starcount"></div>
     <button class="tbtn hot" id="menuBtn">🎮 놀이</button>
-    <button class="tbtn hidden" id="mapBtn">🌍 지도</button>
+    <button class="tbtn hidden" id="mapBtn">✕ 그만하기</button>
   </div>
 
   <div id="mapScreen">
