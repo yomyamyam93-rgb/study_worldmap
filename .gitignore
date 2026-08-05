@@ -1,0 +1,8 @@
+# 일레븐랩스 API 키 — 절대 올리면 안 됩니다
+tools/키.txt
+
+# 예전 목소리 백업 (16MB, 앱에 필요 없음)
+assets/voice_backup/
+
+# 작업 중 생긴 기록
+tools/voice-log.txt

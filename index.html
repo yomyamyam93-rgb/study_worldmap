@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="세계여행">
+<title>세계 여행 - 나라와 수도</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;
+    font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    user-select:none;-webkit-user-select:none;background:#e9f3fa;color:#1e2530;touch-action:none}
+  #app{height:100%;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+  .hidden{display:none!important}
+
+  /* ── 상단 ── */
+  .top{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 16px}
+  .title{font-size:21px;font-weight:800}
+  .sp{flex:1}
+  .tbtn{background:#fff;color:#41506a;border:0;border-radius:22px;padding:10px 18px;
+    font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 3px 9px rgba(0,0,0,.13)}
+  .tbtn.hot{background:#ffb01f;color:#fff;box-shadow:0 4px 11px rgba(255,176,31,.45)}
+  .tbtn:active{transform:scale(.94)}
+  .stars{font-size:17px;font-weight:800;color:#f5a623}
+
+  /* ── 지도 ── */
+  #mapScreen{flex:1;display:flex;align-items:center;justify-content:center;padding:0 12px 12px;min-height:0}
+  .stagebox{position:relative;width:100%;max-width:calc((100vh - 90px) * 2);aspect-ratio:2/1;
+    max-height:100%;border-radius:22px;overflow:hidden;background:#a9d9f0;
+    box-shadow:0 8px 24px rgba(30,50,80,.16)}
+  #map{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+  #map.drag{cursor:grabbing}
+
+  /* 국기는 그림만 담당하고, 누르는 판정은 지도가 통합 처리합니다 */
+  .pin{position:absolute;left:0;top:0;z-index:3;will-change:transform;pointer-events:none}
+  .pin .in{display:block;position:relative;transform:translate(-50%,-50%);
+    transition:transform .18s cubic-bezier(.2,1.5,.5,1)}
+  .pin.sel{z-index:9}
+  .pin.sel .in{transform:translate(-50%,-50%) scale(1.32)}
+  .pin img{width:30px;height:22px;object-fit:cover;display:block;
+    box-shadow:0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35);background:#fff}
+  /* 나라 이름은 국기 오른쪽에 */
+  .pin b{position:absolute;left:19px;top:50%;transform:translateY(-50%);
+    font-size:12px;font-weight:800;color:#2c3b52;white-space:nowrap;
+    background:rgba(255,255,255,.88);border-radius:8px;padding:2px 7px;
+    box-shadow:0 1px 3px rgba(0,0,0,.15);
+    opacity:0;transition:opacity .15s;pointer-events:none}
+  .pin.named b,.pin.sel b{opacity:1}
+
+  /* 대륙 · 바다 · 극지 이름 */
+  .place{position:absolute;left:0;top:0;z-index:2;will-change:transform;pointer-events:none;
+    white-space:nowrap;font-weight:900;letter-spacing:1px}
+  .place span{display:block;transform:translate(-50%,-50%);transition:transform .15s}
+  .place.sel span{transform:translate(-50%,-50%) scale(1.15)}
+  .place.대륙 span{font-size:19px;color:#5f8a45;text-shadow:0 1px 0 rgba(255,255,255,.75)}
+  .place.바다 span{font-size:18px;color:#4e91b8;font-style:italic;
+    text-shadow:0 1px 0 rgba(255,255,255,.6)}
+  .place.극지 span{font-size:17px;color:#7d95a8;text-shadow:0 1px 0 rgba(255,255,255,.8)}
+
+  .zoomhint{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);
+    background:rgba(255,255,255,.9);border-radius:16px;padding:6px 14px;
+    font-size:13px;font-weight:700;color:#5b6678;pointer-events:none;transition:opacity .4s}
+  .reset{position:absolute;right:12px;bottom:12px;background:#fff;border:0;border-radius:20px;
+    padding:10px 16px;font-size:15px;font-weight:800;color:#41506a;cursor:pointer;
+    box-shadow:0 3px 10px rgba(0,0,0,.2);z-index:5}
+
+  /* ── 나라 카드 ── */
+  .sheet{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+    padding:20px;background:rgba(18,28,42,0);transition:background .26s}
+  .sheet.on{background:rgba(18,28,42,.45)}
+  .card{background:#fff;width:min(560px,94vw);max-height:88vh;overflow:auto;
+    border-radius:30px;padding:26px 26px 24px;text-align:center;
+    box-shadow:0 20px 50px rgba(10,20,40,.35);
+    opacity:0;transform:scale(.85);
+    transition:transform .3s cubic-bezier(.2,1.35,.4,1), opacity .2s}
+  .sheet.on .card{opacity:1;transform:scale(1)}
+  .card .bigflag{width:170px;height:114px;margin:0 auto 12px;display:block;
+    object-fit:cover;box-shadow:0 5px 14px rgba(0,0,0,.22)}
+  .cname{font-size:32px;font-weight:900;line-height:1.15}
+  .cen{font-size:15px;color:#8a95a6;margin-bottom:10px}
+  .huge{font-size:58px;margin:2px 0 12px}
+  .placeemo{font-size:92px;line-height:1.05;margin:2px 0 6px}
+  .tapme{cursor:pointer;transition:transform .12s}
+  .tapme:active{transform:scale(.94)}
+  .facts{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+  .fact{display:flex;align-items:center;gap:11px;background:#f4f7fb;border-radius:16px;
+    padding:12px 15px;font-size:18px;font-weight:700;text-align:left;cursor:pointer;
+    transition:background .12s, transform .12s}
+  .fact:active{background:#e3ecf7;transform:scale(.97)}
+  .fact.playing{background:#dceeff;box-shadow:inset 0 0 0 2px #7cc0ff}
+  .fact .k{font-size:23px;flex:none}
+  .fact .v{flex:1}
+  .fact .spk{font-size:19px;flex:none;opacity:.55}
+  .crow{display:flex;gap:11px}
+  .crow button{flex:1;border:0;border-radius:22px;padding:15px;font-size:18px;font-weight:800;cursor:pointer}
+  .primary{background:#2e9bff;color:#fff}
+  .ghost{background:#eef1f6;color:#5b6678}
+
+  /* ── 놀이 ── */
+  #quizScreen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:20px;padding:10px 20px 24px;min-height:0}
+  .prog{font-size:16px;color:#7b8798;font-weight:700}
+  .qsub{font-size:72px;line-height:1}
+  .qtext{font-size:28px;font-weight:800;text-align:center;line-height:1.35}
+  .opts{display:flex;gap:20px;flex-wrap:wrap;justify-content:center}
+  .opt{width:min(180px,26vw);padding:11px;border-radius:20px;background:#fff;border:5px solid transparent;
+    cursor:pointer;box-shadow:0 5px 14px rgba(0,0,0,.13)}
+  .opt img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+  .opt.ok{border-color:#25c26e;background:#eafbf1;transform:scale(1.06)}
+  .opt.no{animation:shake .45s}
+  @keyframes shake{25%{transform:translateX(-11px)}75%{transform:translateX(11px)}}
+  .confetti{position:fixed;top:-30px;width:13px;height:19px;border-radius:3px;pointer-events:none;z-index:60}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top">
+    <div class="title" id="title">🌍 세계 여행</div>
+    <div class="sp"></div>
+    <div class="stars" id="starcount"></div>
+    <button class="tbtn hot" id="quizBtn">🎯 놀이</button>
+    <button class="tbtn hidden" id="mapBtn">🌍 지도</button>
+  </div>
+
+  <div id="mapScreen">
+    <div class="stagebox" id="stagebox">
+      <canvas id="map"></canvas>
+      <div class="zoomhint" id="zoomhint">손가락 두 개로 늘리면 커져요 · 나라를 눌러보세요</div>
+      <button class="reset hidden" id="resetBtn">🌍 전체보기</button>
+    </div>
+  </div>
+
+  <div id="quizScreen" class="hidden">
+    <div class="prog" id="qprog"></div>
+    <div class="qsub" id="qsub"></div>
+    <div class="qtext" id="qtext"></div>
+    <div class="opts" id="qopts"></div>
+  </div>
+</div>
+
+<script src="assets/world-paths.js"></script>
+<script src="assets/countries.js"></script>
+<script src="assets/extra.js"></script>
+<script src="assets/places.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const BY = new Map(COUNTRIES.map(c => [c.id, c]));
+const flagSrc = c => 'assets/flags/' + c.cc + '.svg';
+let stars = +(localStorage.getItem('wm-stars') || 0);
+
+/* 미리 만들어 둔 음성 파일(assets/voice)이 있으면 그걸 쓰고,
+   없으면 기기의 기본 목소리로 읽어 줍니다. */
+const player = new Audio();
+
+function sayBuiltIn(t, l, done){
+  try{ speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang = l || 'ko-KR'; u.rate = 0.85;
+    if(done) u.onend = done;
+    speechSynthesis.speak(u);
+  }catch(e){ if(done) done(); }
+}
+function say(t, l, key, done){
+  if(!key) return sayBuiltIn(t, l, done);
+  try{ speechSynthesis.cancel(); }catch(e){}
+  player.pause();
+
+  let fell = false;
+  const fallback = () => { if(fell) return; fell = true; sayBuiltIn(t, l, done); };
+  player.onended = done || null;
+  player.onerror = fallback;                 // 음성 파일이 없으면 기본 목소리로
+  player.src = 'assets/voice/' + key + '.mp3';
+  player.play().catch(fallback);
+}
+// 여러 문장을 차례로 읽어 줍니다
+function sayAll(list, i){
+  i = i || 0;
+  if(i >= list.length) return;
+  const s = list[i];
+  say(s.text, s.lang, s.key, () => setTimeout(() => sayAll(list, i + 1), 250));
+}
+
+/* 한국어 조사 붙이기 (받침이 있으면 은/이에요, 없으면 는/예요) */
+function hasJong(w){
+  const c = w.charCodeAt(w.length - 1);
+  return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0;
+}
+const eunNeun = w => w + (hasJong(w) ? '은' : '는');
+const ieyo    = w => w + (hasJong(w) ? '이에요' : '예요');
+function drawStars(){ $('starcount').textContent = stars ? '⭐ ' + stars : ''; }
+
+/* ================= 지도 (canvas) ================= */
+const box = $('stagebox'), cv = $('map'), ctx = cv.getContext('2d');
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+
+// 나라 모양을 Path2D 로 미리 만들어 둔다 (매번 다시 해석하지 않도록)
+const SHAPES = WORLD.map(w => ({ id: w.id, path: new Path2D(w.d), fb: w.fb }));
+
+const COL = { sea:'#a9d9f0', land:'#cfe8b8', line:'#8fbc72', sel:'#ffd166', selLine:'#dd9c22' };
+
+const cam = { x:23, y:9, k:1.15 };
+const K_MIN = 1.05, K_MAX = 40;
+let selected = null;
+let BW = 0, BH = 0;
+
+function measure(){
+  BW = box.clientWidth; BH = box.clientHeight;
+  cv.width = Math.max(1, Math.round(BW * DPR));
+  cv.height = Math.max(1, Math.round(BH * DPR));
+}
+function clampCam(){
+  cam.k = Math.min(K_MAX, Math.max(K_MIN, cam.k));
+  const vw = 360/cam.k, vh = 180/cam.k;
+  cam.x = Math.min(360 - vw, Math.max(0, cam.x));
+  cam.y = Math.min(180 - vh, Math.max(0, cam.y));
+}
+// 세계 좌표 → 화면(캔버스 픽셀) 변환값
+function scaleNow(){ return BW / (360/cam.k) * DPR; }
+
+function drawMap(){
+  const s = scaleNow();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = COL.sea;
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 0.7 / s * DPR;              // 확대해도 선 굵기 그대로
+  ctx.strokeStyle = COL.line;
+  const vw = 360/cam.k, vh = 180/cam.k;
+  for(const sh of SHAPES){
+    const f = sh.fb;                            // 화면 밖 나라는 건너뛴다
+    if(f[2] < cam.x || f[0] > cam.x + vw || f[3] < cam.y || f[1] > cam.y + vh) continue;
+    const on = sh.id === selected;
+    ctx.fillStyle = on ? COL.sel : COL.land;
+    ctx.fill(sh.path);
+    if(on){ ctx.strokeStyle = COL.selLine; ctx.lineWidth = 1.6 / s * DPR; }
+    ctx.stroke(sh.path);
+    if(on){ ctx.strokeStyle = COL.line; ctx.lineWidth = 0.7 / s * DPR; }
+  }
+}
+
+const pins = new Map();
+COUNTRIES.forEach(c => {
+  const p = document.createElement('div');
+  p.className = 'pin';
+  p.innerHTML = '<span class="in"><img src="' + flagSrc(c) + '" alt="' + c.ko + '"><b>' + c.ko + '</b></span>';
+  if(QUIZ_CC.indexOf(c.cc) >= 0) p.dataset.feat = '1';   // 잘 알려진 나라는 항상 보이게
+  box.appendChild(p);
+  pins.set(c.id, p);
+});
+
+/* 이름표를 붙일 순서 — 소개글 있는 나라 먼저, 그다음 큰 나라부터.
+   자리를 먼저 차지한 이름이 이기고, 겹치는 이름은 숨겨서 지도가 지저분해지지 않게 한다. */
+const LABEL_ORDER = COUNTRIES.slice().sort((a, b) => {
+  const fa = QUIZ_CC.indexOf(a.cc) >= 0 ? 1 : 0, fb = QUIZ_CC.indexOf(b.cc) >= 0 ? 1 : 0;
+  if(fa !== fb) return fb - fa;
+  const wa = a.b ? (a.b[2]-a.b[0]) : 0, wb = b.b ? (b.b[2]-b.b[0]) : 0;
+  return wb - wa;
+}).map(c => c.id);
+
+/* 대륙 · 바다 · 극지 이름표 */
+const places = new Map();
+PLACES.forEach(pl => {
+  const d = document.createElement('div');
+  d.className = 'place ' + pl.kind;
+  d.innerHTML = '<span>' + pl.ko + '</span>';
+  box.appendChild(d);
+  places.set(pl.id, d);
+});
+const PLACE_BY = new Map(PLACES.map(p => [p.id, p]));
+
+function render(){
+  clampCam();
+  if(!BW) measure();
+  drawMap();
+  const vw = 360/cam.k, vh = 180/cam.k;
+  places.forEach((d, id) => {
+    const pl = PLACE_BY.get(id);
+    const sx = (pl.p[0] - cam.x) / vw * BW, sy = (pl.p[1] - cam.y) / vh * BH;
+    const out = sx < -80 || sy < -30 || sx > BW + 80 || sy > BH + 30;
+    d.style.display = out ? 'none' : '';
+    if(!out){ d._sx = sx; d._sy = sy;
+      d.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0)'; }
+  });
+  pins.forEach((p, id) => {
+    const c = BY.get(id);
+    const sx = (c.p[0] - cam.x) / vw * BW, sy = (c.p[1] - cam.y) / vh * BH;
+    const out = sx < -34 || sy < -34 || sx > BW + 34 || sy > BH + 34;
+    const wide = c.b ? (c.b[2] - c.b[0]) / vw * BW : 0;
+    const show = !out && (p.dataset.feat === '1' || wide >= 34 || cam.k >= 2.2 || id === selected);
+    if(!show){ if(p.style.display !== 'none') p.style.display = 'none'; return; }
+    if(p.style.display === 'none') p.style.display = '';
+    p._sx = sx; p._sy = sy;                       // 국기 누름 판정에 씀
+    p.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0)';
+  });
+  placeLabels();
+  $('resetBtn').classList.toggle('hidden', cam.k < 1.5);
+}
+
+function placeLabels(){
+  const taken = [];                               // 이미 자리를 차지한 영역들
+  const overlap = (r) => {
+    for(const t of taken)
+      if(r[0] < t[2] && r[2] > t[0] && r[1] < t[3] && r[3] > t[1]) return true;
+    return false;
+  };
+  // 국기 자체는 무조건 자리를 차지한다 (이름이 다른 국기를 가리지 않게)
+  pins.forEach(p => {
+    if(p.style.display === 'none') return;
+    taken.push([p._sx - 16, p._sy - 12, p._sx + 16, p._sy + 12]);
+  });
+  for(const id of LABEL_ORDER){
+    const p = pins.get(id);
+    if(!p || p.style.display === 'none'){ if(p) p.classList.remove('named'); continue; }
+    const w = BY.get(id).ko.length * 12 + 16, h = 18;
+    const r = [p._sx + 18, p._sy - h/2, p._sx + 18 + w, p._sy + h/2];
+    if(r[2] > BW || overlap(r)){ p.classList.remove('named'); continue; }
+    taken.push(r);
+    p.classList.add('named');
+  }
+}
+
+/* 손가락이 움직일 때마다 그리면 렉이 걸린다. 화면 새로고침에 맞춰 한 번만 그린다. */
+let pending = false;
+function scheduleRender(){
+  if(pending) return;
+  pending = true;
+  const run = () => { if(!pending) return; pending = false; render(); };
+  requestAnimationFrame(run);
+  setTimeout(run, 100);                         // 애니메이션이 멈춘 화면 대비
+}
+
+let anim = null, animEnd = null;
+function flyTo(tx, ty, tk, ms){
+  if(anim) cancelAnimationFrame(anim);
+  if(animEnd) clearTimeout(animEnd);
+  if(typeof stopGlide === 'function') stopGlide();
+  const s = { ...cam }, t0 = performance.now(), dur = ms || 620;
+  let done = false;
+  (function step(now){
+    const r = Math.min(1, (now - t0) / dur);
+    const e = 1 - Math.pow(1 - r, 3);
+    cam.x = s.x + (tx - s.x) * e;
+    cam.y = s.y + (ty - s.y) * e;
+    cam.k = s.k + (tk - s.k) * e;
+    render();
+    if(r < 1) anim = requestAnimationFrame(step); else done = true;
+  })(performance.now());
+  animEnd = setTimeout(() => {                  // 애니메이션이 멈춰도 목적지에 도착하게
+    if(done) return;
+    if(anim) cancelAnimationFrame(anim);
+    cam.x = tx; cam.y = ty; cam.k = tk; render();
+  }, dur + 80);
+}
+/* ================= 손가락 조작 ================= */
+const ptrs = new Map();
+let startDist = 0, startK = 1, startMid = null, moved = 0, downAt = 0;
+let vX = 0, vY = 0, lastMoveT = 0, glideAnim = null;
+
+function stopGlide(){ if(glideAnim) cancelAnimationFrame(glideAnim); glideAnim = null; }
+
+/* 손을 뗀 뒤 관성으로 조금 더 미끄러지게 (딱 멈추면 답답하게 느껴짐) */
+function glide(){
+  stopGlide();
+  if(performance.now() - lastMoveT > 90) return;   // 멈춘 채로 뗐으면 미끄러지지 않음
+  let vx = vX, vy = vY, prev = performance.now();
+  (function step(now){
+    const dt = Math.min(40, now - prev); prev = now;
+    cam.x -= vx * dt; cam.y -= vy * dt;
+    const f = Math.pow(0.94, dt / 16);             // 마찰
+    vx *= f; vy *= f;
+    clampCam(); render();
+    if(Math.hypot(vx, vy) > 0.0008) glideAnim = requestAnimationFrame(step);
+    else glideAnim = null;
+  })(performance.now());
+}
+
+function worldAt(clientX, clientY){
+  const r = box.getBoundingClientRect();
+  const vw = 360/cam.k, vh = 180/cam.k;
+  return { x: cam.x + (clientX - r.left)/r.width * vw,
+           y: cam.y + (clientY - r.top)/r.height * vh };
+}
+// 국기를 눌렀는지 먼저 본다 (국기 주변 넉넉하게 인정 — 아이 손가락 기준)
+function pinAt(clientX, clientY){
+  const r = box.getBoundingClientRect();
+  const x = clientX - r.left, y = clientY - r.top;
+  let best = null, bd = 28;
+  pins.forEach((p, id) => {
+    if(p.style.display === 'none' || p._sx === undefined) return;
+    const d = Math.hypot(p._sx - x, p._sy - y);
+    if(d < bd){ bd = d; best = id; }
+  });
+  return best;
+}
+
+// 대륙·바다 이름을 눌렀는지 (글자 범위 안이면 인정)
+function placeAt(clientX, clientY){
+  for(const [id, d] of places){
+    if(d.style.display === 'none') continue;
+    const r = d.firstChild.getBoundingClientRect();
+    if(clientX >= r.left - 6 && clientX <= r.right + 6 &&
+       clientY >= r.top - 8 && clientY <= r.bottom + 8) return id;
+  }
+  return null;
+}
+
+// 화면에서 누른 곳이 어느 나라인지 (canvas 도형으로 직접 판정)
+function countryAt(clientX, clientY){
+  const r = box.getBoundingClientRect();
+  const px = (clientX - r.left) * DPR, py = (clientY - r.top) * DPR;
+  const s = scaleNow();
+  ctx.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
+  for(let i = SHAPES.length - 1; i >= 0; i--){
+    if(ctx.isPointInPath(SHAPES[i].path, px, py)) return SHAPES[i].id;
+  }
+  return null;
+}
+
+box.addEventListener('pointerdown', e => {
+  stopGlide();
+  ptrs.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  box.setPointerCapture(e.pointerId);
+  moved = 0; downAt = performance.now(); lastMoveT = downAt; vX = vY = 0;
+  cv.classList.add('drag');
+  if(ptrs.size === 2){
+    const [a,b] = [...ptrs.values()];
+    startDist = Math.hypot(a.x-b.x, a.y-b.y); startK = cam.k;
+    startMid = worldAt((a.x+b.x)/2, (a.y+b.y)/2);
+  }
+});
+box.addEventListener('pointermove', e => {
+  if(!ptrs.has(e.pointerId)) return;
+  const prev = ptrs.get(e.pointerId);
+  const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+  ptrs.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  moved += Math.hypot(dx, dy);
+  if(anim) cancelAnimationFrame(anim);
+
+  if(ptrs.size === 2 && startDist){
+    const [a,b] = [...ptrs.values()];
+    cam.k = startK * (Math.hypot(a.x-b.x, a.y-b.y) / startDist);
+    clampCam();
+    const mid = worldAt((a.x+b.x)/2, (a.y+b.y)/2);
+    cam.x += startMid.x - mid.x; cam.y += startMid.y - mid.y;
+  } else if(ptrs.size === 1){
+    const r = box.getBoundingClientRect();
+    const wdx = dx / r.width * (360/cam.k), wdy = dy / r.height * (180/cam.k);
+    cam.x -= wdx; cam.y -= wdy;
+    const now = performance.now();                 // 미끄러짐에 쓸 속도 기록
+    const gap = Math.max(8, now - lastMoveT);
+    vX = wdx / gap; vY = wdy / gap; lastMoveT = now;
+  }
+  scheduleRender();
+});
+box.addEventListener('pointerup', e => {
+  const wasTap = moved < 9 && performance.now() - downAt < 450 && ptrs.size === 1;
+  ptrs.delete(e.pointerId);
+  if(ptrs.size < 2) startDist = 0;
+  if(!ptrs.size) cv.classList.remove('drag');
+  if(wasTap){
+    const pin = pinAt(e.clientX, e.clientY);
+    const pl  = pin ? null : placeAt(e.clientX, e.clientY);
+    const id  = pin || (pl ? null : countryAt(e.clientX, e.clientY));
+    if(pl) selectPlace(pl);
+    else if(id && BY.has(id)) selectCountry(id);
+  } else glide();                                  // 손을 떼면 미끄러지듯 이어서
+});
+box.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); startDist = 0; });
+box.addEventListener('wheel', e => {                 // 컴퓨터에서 확인용
+  e.preventDefault();
+  const before = worldAt(e.clientX, e.clientY);
+  cam.k *= e.deltaY < 0 ? 1.15 : 1/1.15;
+  clampCam();
+  const after = worldAt(e.clientX, e.clientY);
+  cam.x += before.x - after.x; cam.y += before.y - after.y;
+  scheduleRender();
+}, { passive:false });
+
+$('resetBtn').onclick = () => { clearSel(); flyTo(23, 9, 1.15); };
+window.addEventListener('resize', () => { measure(); render(); });
+
+/* ================= 나라 고르기 ================= */
+function clearSel(){
+  places.forEach(d => d.classList.remove('sel'));
+  if(!selected) return;
+  const pin = pins.get(selected); if(pin) pin.classList.remove('sel');
+  selected = null;
+  render();
+}
+
+/* 대륙 · 바다 · 극지 고르기 */
+function selectPlace(id){
+  clearSel();
+  places.get(id).classList.add('sel');
+  $('zoomhint').style.opacity = 0;
+  openPlaceCard(PLACE_BY.get(id));
+}
+function selectCountry(id){
+  if(selected){ const o = pins.get(selected); if(o) o.classList.remove('sel'); }
+  selected = id;
+  pins.get(id).classList.add('sel');
+  $('zoomhint').style.opacity = 0;
+  render();                                   // 고른 나라를 노란색으로 표시
+  openCard(BY.get(id));                       // 확대·이동 없이 정보만
+}
+
+/* ================= 나라 카드 ================= */
+/* 나라 카드와 대륙·바다 카드가 함께 쓰는 틀 */
+function showCard(head, title, sub, emo, lines, name){
+  const el = document.createElement('div');
+  el.className = 'sheet';
+  el.innerHTML = `
+    <div class="card">
+      ${head}
+      <div class="cname">${title}</div>
+      <div class="cen">${sub}</div>
+      ${emo ? '<div class="huge">' + emo + '</div>' : ''}
+      <div class="facts">${lines.map((l,i) =>
+        '<div class="fact" data-i="'+i+'"><span class="k">'+l.k+'</span>'
+        + '<span class="v">'+l.html+'</span><span class="spk">🔊</span></div>').join('')}</div>
+      <div class="crow">
+        <button class="ghost" data-close>닫기</button>
+        <button class="primary" data-read>🔊 다 들려주기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.classList.add('on'), 16);
+
+  // 국기(또는 큰 그림)를 누르면 이름을 다시 불러 줍니다
+  const head0 = el.querySelector('.bigflag, .placeemo');
+  if(head0){
+    head0.classList.add('tapme');
+    head0.onclick = () => say(name.text, 'ko-KR', name.key);
+  }
+
+  const rows = [...el.querySelectorAll('.fact')];
+  const mark = i => rows.forEach((r, n) => r.classList.toggle('playing', n === i));
+  rows.forEach((row, i) => row.onclick = () => {
+    mark(i);
+    const l = lines[i];
+    say(l.text, l.lang || 'ko-KR', l.key, () => mark(-1));
+  });
+
+  // 팝업과 정보가 다 뜬 다음에 이름을 불러 줍니다
+  const nameTimer = setTimeout(() => say(name.text, 'ko-KR', name.key), 420);
+
+  el.querySelector('[data-read]').onclick = () => sayAll([name, ...lines]);
+  const close = () => {
+    clearTimeout(nameTimer);
+    try{ player.pause(); speechSynthesis.cancel(); }catch(e){}
+    el.classList.remove('on'); setTimeout(() => el.remove(), 320); clearSel();
+  };
+  el.querySelector('[data-close]').onclick = close;
+  el.onclick = e => { if(e.target === el) close(); };
+}
+
+function openCard(c){
+  const x = EXTRA[c.cc];
+  const lines = [
+    { k:'🏛️', html:'수도는 <b>'+c.cap+'</b>',
+      key:'cap_'+c.cc,  text:`${c.ko}의 수도는 ${ieyo(c.cap)}` },
+    { k:'🌏', html:c.cont+'에 있어요',
+      key:'cont_'+c.cc, text:`${eunNeun(c.ko)} ${c.cont}에 있어요` }
+  ];
+  if(x && x.hi) lines.push(                       // 인사말은 있는 나라만
+    { k:'👋', html:'인사말 <b>'+x.hi+'</b>', key:'hi_'+c.cc, text:x.hi, lang:x.hl });
+  if(x) lines.push(
+    { k:'✨', html:x.fact, key:'fact_'+c.cc, text:`${eunNeun(c.ko)} ${x.fact}` });
+
+  showCard(`<img class="bigflag" src="${flagSrc(c)}" alt="${c.ko} 국기">`,
+    c.ko, c.en, x ? x.emo : '🌍', lines, { key:'name_'+c.cc, text:c.ko });
+}
+
+function openPlaceCard(pl){
+  const icon = pl.kind === '바다' ? '🌊' : (pl.kind === '극지' ? '❄️' : '🗺️');
+  const lines = [
+    { k:icon, html:ieyo(pl.kind), key:'pkind_'+pl.id,
+      text:`${eunNeun(pl.ko)} ${ieyo(pl.kind)}` },
+    { k:'✨', html:pl.fact, key:'pfact_'+pl.id,
+      text:`${eunNeun(pl.ko)} ${pl.fact}` }
+  ];
+  showCard('<div class="placeemo">' + pl.emo + '</div>',
+    pl.ko, pl.en, '', lines, { key:'pname_'+pl.id, text:pl.ko });
+}
+
+/* ================= 놀이 ================= */
+let qList = [], qNo = 0;
+const pick = a => a[Math.floor(Math.random()*a.length)];
+const shuffle = a => { for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+// 놀이는 아이가 알 만한 나라에서만 출제 (목록은 extra.js 의 QUIZ_CC)
+const QUIZ_POOL = COUNTRIES.filter(c => QUIZ_CC.indexOf(c.cc) >= 0);
+
+$('quizBtn').onclick = () => {
+  qList = shuffle([...QUIZ_POOL]).slice(0,5); qNo = 0;
+  $('mapScreen').classList.add('hidden'); $('quizScreen').classList.remove('hidden');
+  $('quizBtn').classList.add('hidden');    $('mapBtn').classList.remove('hidden');
+  $('title').textContent = '🎯 나라 찾기 놀이';
+  nextQ();
+};
+$('mapBtn').onclick = () => {
+  $('quizScreen').classList.add('hidden'); $('mapScreen').classList.remove('hidden');
+  $('mapBtn').classList.add('hidden');     $('quizBtn').classList.remove('hidden');
+  $('title').textContent = '🌍 세계 여행';
+  measure(); render();
+};
+
+function nextQ(){
+  if(qNo >= qList.length) return finishQuiz();
+  const c = qList[qNo], x = EXTRA[c.cc];
+  const type = pick(['flag','cap','fact']);
+  const q = {
+    flag: ['<b>'+c.ko+'</b>의 국기는 어느 것일까요?', '🚩', c.ko+'의 국기는 어느 것일까요?'],
+    cap : ['수도가 <b>'+c.cap+'</b>인 나라는?', '🏛️', '수도가 '+c.cap+'인 나라는 어디일까요?'],
+    fact: [x.fact + '<br>어느 나라일까요?', x.emo, x.fact + '. 어느 나라일까요?']
+  }[type];
+
+  $('qprog').textContent = (qNo+1) + ' / ' + qList.length;
+  $('qsub').textContent = q[1];
+  $('qtext').innerHTML = q[0];
+  say(q[2], 'ko-KR', 'q_' + type + '_' + c.cc);
+
+  const opts = shuffle([c, ...shuffle(QUIZ_POOL.filter(o => o.id !== c.id)).slice(0,2)]);
+  const bx = $('qopts'); bx.innerHTML = '';
+  let locked = false;
+  opts.forEach(o => {
+    const d = document.createElement('div');
+    d.className = 'opt';
+    d.innerHTML = '<img src="' + flagSrc(o) + '" alt="' + o.ko + '">';
+    d.onclick = () => {
+      if(locked) return;
+      if(o.id === c.id){
+        locked = true; d.classList.add('ok');
+        say(c.ko + ', 정답이에요!', 'ko-KR', 'ok_' + c.cc);
+        qNo++; setTimeout(nextQ, 1400);
+      } else {
+        d.classList.add('no'); setTimeout(() => d.classList.remove('no'), 500);
+      }
+    };
+    bx.appendChild(d);
+  });
+}
+
+function finishQuiz(){
+  stars++; localStorage.setItem('wm-stars', stars); drawStars();
+  $('qprog').textContent = ''; $('qsub').textContent = '🎉';
+  $('qtext').innerHTML = '다 맞혔어요!<br>⭐ 별을 하나 받았어요';
+  $('qopts').innerHTML = '';
+  say('참 잘했어요! 별을 하나 받았어요', 'ko-KR', 'praise');
+  confetti();
+}
+function confetti(){
+  const cols = ['#ff7a2f','#4c9bff','#25c26e','#f5a623','#ff5fa2'];
+  for(let i=0;i<40;i++){
+    const c = document.createElement('div'); c.className = 'confetti';
+    c.style.left = Math.random()*100 + 'vw'; c.style.background = cols[i%cols.length];
+    document.body.appendChild(c);
+    c.animate([{transform:'translateY(0) rotate(0)',opacity:1},
+      {transform:'translateY(110vh) rotate(' + 720*Math.random() + 'deg)',opacity:.9}],
+      {duration:1800 + Math.random()*1200, easing:'ease-in'}).onfinish = () => c.remove();
+  }
+}
+
+drawStars();
+measure();
+render();
+setTimeout(() => { $('zoomhint').style.opacity = 0; }, 6000);
+</script>
+</body>
+</html>
