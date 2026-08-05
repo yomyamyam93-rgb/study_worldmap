@@ -112,16 +112,21 @@ fs.mkdirSync(VDIR, { recursive: true });
     if(fs.existsSync(out) && fs.statSync(out).size > 0){ skipped++; continue; }
 
     try{
+      /* 나라·대륙 '이름'은 단어 하나뿐이라 AI가 외국어로 오인합니다
+         (그리스 → Greece 식 영어 억양). 언어를 한국어로 못박는 모델을 씁니다.
+         문장은 앞뒤 한국어 덕분에 잘 읽으므로 원래 모델 그대로 둡니다. */
+      const isName = /^(name_|pname_)/.test(j.key);
+      const body = isName
+        ? { text: j.text, model_id: 'eleven_flash_v2_5', language_code: 'ko',
+            voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true } }
+        : { text: j.text, model_id: 'eleven_multilingual_v2',
+            voice_settings: { stability: 0.35, similarity_boost: 0.8, style: 0.45, use_speaker_boost: true } };
+
       const res = await fetch(
         'https://api.elevenlabs.io/v1/text-to-speech/' + cfg.VOICE_ID + '?output_format=mp3_44100_64',
         { method:'POST',
           headers:{ 'xi-api-key': cfg.ELEVENLABS_API_KEY, 'Content-Type':'application/json' },
-          body: JSON.stringify({ text: j.text, model_id: 'eleven_multilingual_v2',
-            // 짧은 이름은 차분하게(억양이 튀지 않게), 문장은 밝고 표현이 살아 있게
-            voice_settings: j.text.length <= 10
-              ? { stability: 0.65, similarity_boost: 0.85, style: 0.15, use_speaker_boost: true }
-              : { stability: 0.35, similarity_boost: 0.8,  style: 0.45, use_speaker_boost: true }
-          }) });
+          body: JSON.stringify(body) });
 
       if(!res.ok){
         const msg = await res.text();
