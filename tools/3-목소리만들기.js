@@ -50,6 +50,7 @@ const EXTRA     = load('extra.js', 'EXTRA');
 const QUIZ_CC   = load('extra.js', 'QUIZ_CC');
 const PRON      = load('extra.js', 'PRON');
 const PLACES    = load('places.js', 'PLACES');
+const PLAY_COLORS = load('flagcolors.js', 'PLAY_COLORS');
 
 /* ── 만들 음성 목록 ── */
 const jobs = [];
@@ -96,7 +97,9 @@ for(const p of PLACES){                                             // 대륙 ·
 }
 add('praise', '참 잘했어요! 별을 하나 받았어요');
 add('findagain', '다시 찾아보세요.');
-add('today',     '오늘의 나라예요.');
+add('today',      '오늘의 나라예요.');
+add('animalfind', '동물을 눌러보세요.');
+for(const c of PLAY_COLORS) add('color_' + c.ko, `${c.adj}이 들어간 국기를 모두 찾아보세요.`);
 add('stampall',  '우와! 이 대륙을 다 모았어요.');
 
 /* ── 비용 미리보기 ── */

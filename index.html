@@ -148,6 +148,27 @@
     pointer-events:none;animation:fadeout .5s forwards}
   @keyframes fadeout{to{opacity:0}}
 
+  /* ── 색깔 찾기 ── */
+  #colorScreen{position:absolute;inset:0;z-index:15;background:#eaf3fb;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;padding:78px 14px 18px;overflow:auto}
+  .cq{font-size:clamp(20px,4.4vw,28px);font-weight:800;text-align:center;line-height:1.4}
+  .cq .sw{font-size:1.3em;vertical-align:-3px}
+  .cgrid{display:grid;grid-template-columns:repeat(3, min(190px,28vw));gap:14px}
+  .cflag{position:relative;border-radius:14px;overflow:hidden;cursor:pointer;
+    box-shadow:0 4px 10px rgba(0,0,0,.16)}
+  .cflag img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+  .cflag.got{box-shadow:0 0 0 5px #25c26e;transform:scale(1.04)}
+  .cflag.got::after{content:'✓';position:absolute;right:6px;top:2px;font-size:26px;color:#25c26e;
+    text-shadow:0 1px 3px #fff,0 0 6px #fff}
+  .cflag.bad{animation:shake .45s}
+
+  /* ── 동물 지도 ── */
+  .animal{position:absolute;left:0;top:0;z-index:4;will-change:transform;pointer-events:none;
+    font-size:34px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
+  .animal span{display:block;transform:translate(-50%,-50%);transition:transform .15s}
+  .animal.sel span{transform:translate(-50%,-50%) scale(1.3)}
+
   /* ── 여권 (도장 모으기) ── */
   #passScreen{position:absolute;inset:0;z-index:15;background:#fdf8ee;overflow:auto;
     padding:calc(env(safe-area-inset-top) + 74px) 16px 28px}
@@ -240,6 +261,10 @@
           <div class="nm">짝 맞추기</div><div class="dsc">같은 국기 찾기</div></button>
         <button class="game" data-g="find"><div class="ico">🔎</div>
           <div class="nm">지도에서 찾기</div><div class="dsc">나라 위치 찾기</div></button>
+        <button class="game" data-g="color"><div class="ico">🎨</div>
+          <div class="nm">색깔 찾기</div><div class="dsc">국기 색 고르기</div></button>
+        <button class="game" data-g="animal"><div class="ico">🐾</div>
+          <div class="nm">동물 찾기</div><div class="dsc">지도에서 동물</div></button>
         <button class="game" data-g="pass"><div class="ico">🎫</div>
           <div class="nm">내 여권</div><div class="dsc">모은 도장 보기</div></button>
       </div>
@@ -250,6 +275,12 @@
   <div id="matchScreen" class="hidden">
     <div class="prog" id="mprog"></div>
     <div class="mgrid" id="mgrid"></div>
+  </div>
+
+  <div id="colorScreen" class="hidden">
+    <div class="prog" id="cprog"></div>
+    <div class="cq" id="cq"></div>
+    <div class="cgrid" id="cgrid"></div>
   </div>
 
   <div id="passScreen" class="hidden">
@@ -275,6 +306,7 @@
 <script src="assets/countries.js"></script>
 <script src="assets/extra.js"></script>
 <script src="assets/places.js"></script>
+<script src="assets/flagcolors.js"></script>
 <script>
 /* ===== 자동 업데이트 =====
    앱을 열 때마다 version.json 을 확인합니다. 번호가 달라졌으면 저장해 둔 파일을
@@ -449,11 +481,21 @@ function render(){
     const sx = (c.p[0] - cam.x) * cam.s, sy = (c.p[1] - cam.y) * cam.s;
     const out = sx < 16 || sy < 14 || sx > BW - 16 || sy > BH - 14;
     const wide = c.b ? (c.b[2] - c.b[0]) * cam.s : 0;
-    const show = !out && (p.dataset.feat === '1' || wide >= 34 || z >= 2.2 || id === selected);
+    const show = !animalMode && !out
+      && (p.dataset.feat === '1' || wide >= 34 || z >= 2.2 || id === selected);
     if(!show){ if(p.style.display !== 'none') p.style.display = 'none'; return; }
     if(p.style.display === 'none') p.style.display = '';
     p._sx = sx; p._sy = sy;                       // 국기 누름 판정에 씀
     p.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0)';
+  });
+  animals.forEach((d, id) => {                 // 동물 찾기 모드일 때만 보임
+    if(!animalMode){ d.classList.add('hidden'); return; }
+    const c = BY.get(id);
+    const sx = (c.p[0] - cam.x) * cam.s, sy = (c.p[1] - cam.y) * cam.s;
+    const out = sx < 18 || sy < 18 || sx > BW - 18 || sy > BH - 18;
+    d.classList.toggle('hidden', out);
+    if(!out){ d._sx = sx; d._sy = sy;
+      d.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0)'; }
   });
   placeLabels();
   $('resetBtn').classList.toggle('hidden', z < 1.15);
@@ -619,6 +661,9 @@ box.addEventListener('pointerup', e => {
   if(ptrs.size < 2) startDist = 0;
   if(!ptrs.size) cv.classList.remove('drag');
   if(wasTap){
+    const an = animalAt(e.clientX, e.clientY);
+    if(an){ selectCountry(an); return; }
+    if(animalMode) return;                       // 동물 찾기 중에는 동물만 반응
     const pin = pinAt(e.clientX, e.clientY);
     const pl  = pin ? null : placeAt(e.clientX, e.clientY);
     const id  = pin || (pl ? null : countryAt(e.clientX, e.clientY));
@@ -760,7 +805,7 @@ const QUIZ_POOL = COUNTRIES.filter(c => QUIZ_CC.indexOf(c.cc) >= 0);
 
 /* ===== 화면 바꾸기 ===== */
 function showScreen(name, title){
-  ['mapScreen','quizScreen','matchScreen','passScreen'].forEach(s =>
+  ['mapScreen','quizScreen','matchScreen','passScreen','colorScreen'].forEach(s =>
     $(s).classList.toggle('hidden', s !== name));
   $('menuBtn').classList.toggle('hidden', name !== 'mapScreen');
   $('mapBtn').classList.toggle('hidden', name === 'mapScreen');
@@ -782,15 +827,115 @@ $('menuClose').onclick = closeMenu;
 $('menuScreen').onclick = e => { if(e.target === $('menuScreen')) closeMenu(); };
 document.querySelectorAll('.game').forEach(b => b.onclick = () => {
   closeMenu();
-  const go = { quiz: startQuiz, match: startMatch, find: startFind, pass: openPassport }[b.dataset.g];
+  const go = { quiz: startQuiz, match: startMatch, find: startFind,
+               color: startColor, animal: startAnimal, pass: openPassport }[b.dataset.g];
   setTimeout(go, 280);
 });
-$('mapBtn').onclick = () => { endFind(); showScreen('mapScreen', '🌍 세계 여행'); };
+$('mapBtn').onclick = () => { endFind(); endAnimal(); showScreen('mapScreen', '🌍 세계 여행'); };
 
 function startQuiz(){
   qList = shuffle([...QUIZ_POOL]).slice(0,5); qNo = 0;
   showScreen('quizScreen', '🚩 국기 맞히기');
   nextQ();
+}
+
+/* ===== 색깔 찾기 ===== */
+const COLOR_STRONG = 5, COLOR_NONE = 1;      // 5% 이상이면 '있다', 1% 미만이면 '없다'
+let cRound = 0, cLeft = 0, cLock = false;
+
+function startColor(){ cRound = 0; showScreen('colorScreen', '🎨 색깔 찾기'); nextColor(); }
+
+function nextColor(){
+  if(cRound >= 3) return colorDone();
+  const col = pick(PLAY_COLORS);
+  const has = c => (FLAGCOLOR[c.cc] || {})[col.ko] || 0;
+  const yes = shuffle(COUNTRIES.filter(c => has(c) >= COLOR_STRONG)).slice(0, 3);
+  const no  = shuffle(COUNTRIES.filter(c => has(c) < COLOR_NONE)).slice(0, 3);
+  if(yes.length < 3 || no.length < 3) return nextColor();      // 보기가 모자라면 다른 색으로
+
+  cLeft = yes.length; cLock = false;
+  $('cprog').textContent = (cRound + 1) + ' / 3';
+  $('cq').innerHTML = '<span class="sw">' + col.em + '</span> <b>' + col.adj
+    + '</b>이 들어간 국기를<br>모두 찾아보세요';
+  say(col.adj + '이 들어간 국기를 모두 찾아보세요', 'ko-KR', 'color_' + col.ko);
+
+  const all = shuffle([...yes, ...no]);
+  const g = $('cgrid');
+  g.innerHTML = all.map((c, i) =>
+    '<div class="cflag" data-i="' + i + '"><img src="' + flagSrc(c) + '" alt=""></div>').join('');
+  [...g.children].forEach(el => el.onclick = () => {
+    if(cLock) return;
+    const c = all[+el.dataset.i];
+    if(el.classList.contains('got')) return;
+    if(has(c) >= COLOR_STRONG){
+      el.classList.add('got');
+      say(c.ko, 'ko-KR', 'name_' + c.cc);
+      if(--cLeft === 0){ cLock = true; cRound++; setTimeout(nextColor, 1300); }
+    } else {
+      el.classList.add('bad');
+      setTimeout(() => el.classList.remove('bad'), 500);
+    }
+  });
+}
+function colorDone(){
+  stars++; localStorage.setItem('wm-stars', stars); drawStars();
+  $('cprog').textContent = '';
+  $('cq').innerHTML = '🎉 다 찾았어요!<br>⭐ 별을 하나 받았어요';
+  const g = $('cgrid');
+  g.style.gridTemplateColumns = '1fr';
+  g.innerHTML = '<button class="bigbtn go" id="cAgain">🎨 한 번 더</button>'
+              + '<button class="bigbtn back" id="cDone">🌍 지도로</button>';
+  $('cAgain').onclick = () => { g.style.gridTemplateColumns = ''; startColor(); };
+  $('cDone').onclick  = () => { g.style.gridTemplateColumns = ''; $('mapBtn').onclick(); };
+  say('참 잘했어요! 별을 하나 받았어요', 'ko-KR', 'praise');
+  confetti();
+}
+
+/* ===== 동물 찾기 (지도 위) ===== */
+const ANIMAL_EMO = new Set(['🐘','🐼','🦎','🐫','🐊','🦧','🐠','🐅','🐉','🦁','🐈','🐴','🦌',
+  '🐻','🦬','🐦','🐢','🦍','🦋','🐟','🦜','🐄','🦥','🐷','🦘','🐑','🐬','🐋','🪼','🐒','🦒',
+  '🐪','🐎','🦙','🐧','🐆','🐝']);
+const ANIMAL_LIST = COUNTRIES.filter(c => EXTRA[c.cc] && ANIMAL_EMO.has(EXTRA[c.cc].emo));
+const animals = new Map();
+ANIMAL_LIST.forEach(c => {
+  const d = document.createElement('div');
+  d.className = 'animal hidden';
+  d.innerHTML = '<span>' + EXTRA[c.cc].emo + '</span>';
+  box.appendChild(d);
+  animals.set(c.id, d);
+});
+let animalMode = false;
+
+function startAnimal(){
+  animalMode = true;
+  showScreen('mapScreen', '🐾 동물 찾기');
+  $('menuBtn').classList.add('hidden'); $('mapBtn').classList.remove('hidden');
+  $('findBar').classList.remove('hidden');
+  $('findText').innerHTML = '<span class="n">동물</span>을 눌러보세요';
+  $('findProg').textContent = ANIMAL_LIST.length + '마리';
+  $('zoomhint').style.opacity = 0;
+  resetCam(); render();
+  say('동물을 눌러보세요', 'ko-KR', 'animalfind');
+}
+function endAnimal(){
+  if(!animalMode) return;
+  animalMode = false;
+  animals.forEach(d => d.classList.add('hidden'));
+  $('findBar').classList.add('hidden');
+  render();
+}
+// 동물을 눌렀는지
+function animalAt(clientX, clientY){
+  if(!animalMode) return null;
+  const r = box.getBoundingClientRect();
+  const x = clientX - r.left, y = clientY - r.top;
+  let best = null, bd = 30;
+  animals.forEach((d, id) => {
+    if(d.classList.contains('hidden') || d._sx === undefined) return;
+    const dist = Math.hypot(d._sx - x, d._sy - y);
+    if(dist < bd){ bd = dist; best = id; }
+  });
+  return best;
 }
 
 /* ===== 여권 (도장 모으기) ===== */
