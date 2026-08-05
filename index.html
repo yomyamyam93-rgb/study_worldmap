@@ -109,18 +109,22 @@
   #menuScreen{position:fixed;inset:0;z-index:25;background:rgba(18,28,42,0);
     display:flex;align-items:center;justify-content:center;padding:20px;transition:background .25s}
   #menuScreen.on{background:rgba(18,28,42,.5)}
-  .menucard{background:#fff;border-radius:30px;padding:26px 24px;width:min(620px,94vw);
-    max-height:90vh;overflow:auto;text-align:center;box-shadow:0 20px 50px rgba(10,20,40,.35);
+  .menucard{background:#fff;border-radius:28px;padding:clamp(16px,4vw,26px);width:min(660px,96vw);
+    max-height:88vh;overflow:auto;text-align:center;box-shadow:0 20px 50px rgba(10,20,40,.35);
     opacity:0;transform:scale(.86);transition:transform .3s cubic-bezier(.2,1.35,.4,1),opacity .2s}
   #menuScreen.on .menucard{opacity:1;transform:scale(1)}
-  .menucard h2{font-size:26px;margin:0 0 18px}
-  .games{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-bottom:18px}
-  .game{width:min(170px,42vw);background:#f4f7fb;border:0;border-radius:24px;padding:20px 10px;
+  .menucard h2{font-size:clamp(20px,5vw,26px);margin:0 0 14px}
+  /* 화면 폭에 따라 칸 수가 저절로 바뀝니다 */
+  .games{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));
+    gap:clamp(8px,2vw,14px);margin-bottom:16px}
+  .game{background:#f4f7fb;border:0;border-radius:20px;padding:clamp(12px,3vw,18px) 6px;
     cursor:pointer;font-family:inherit}
   .game:active{transform:scale(.95)}
-  .game .ico{font-size:52px;line-height:1.1}
-  .game .nm{font-size:19px;font-weight:800;margin-top:8px;color:#2a3547}
-  .game .dsc{font-size:13px;color:#8a95a6;margin-top:3px;font-weight:600}
+  .game .ico{font-size:clamp(34px,9vw,48px);line-height:1.1}
+  .game .nm{font-size:clamp(15px,3.8vw,19px);font-weight:800;margin-top:6px;color:#2a3547;
+    white-space:nowrap}
+  .game .dsc{font-size:clamp(11px,2.7vw,13px);color:#8a95a6;margin-top:2px;font-weight:600;
+    white-space:nowrap}
 
   /* ── 짝 맞추기 ── */
   #matchScreen{position:absolute;inset:0;z-index:15;background:#eaf3fb;
