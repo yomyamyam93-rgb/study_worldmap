@@ -157,6 +157,28 @@
 <script src="assets/extra.js"></script>
 <script src="assets/places.js"></script>
 <script>
+/* ===== 자동 업데이트 =====
+   앱을 열 때마다 version.json 을 확인합니다. 번호가 달라졌으면 저장해 둔 파일을
+   비우고 한 번만 새로고침해서 새 내용을 받아옵니다. (인터넷이 없으면 그냥 넘어감) */
+if('serviceWorker' in navigator && location.protocol.indexOf('http') === 0){
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+  fetch('version.json', { cache:'no-store' })
+    .then(r => r.json())
+    .then(async info => {
+      const seen = localStorage.getItem('wm-ver');
+      if(seen && seen !== info.v && !sessionStorage.getItem('wm-reloaded')){
+        sessionStorage.setItem('wm-reloaded', '1');
+        localStorage.setItem('wm-ver', info.v);
+        const reg = await navigator.serviceWorker.getRegistration();
+        if(reg && reg.active) reg.active.postMessage('clear');
+        setTimeout(() => location.reload(), 400);
+        return;
+      }
+      localStorage.setItem('wm-ver', info.v);
+    })
+    .catch(() => {});
+}
+
 const $ = id => document.getElementById(id);
 const BY = new Map(COUNTRIES.map(c => [c.id, c]));
 const flagSrc = c => 'assets/flags/' + c.cc + '.svg';
