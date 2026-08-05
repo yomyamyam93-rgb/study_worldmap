@@ -68,6 +68,7 @@ const hasJong = w => { const c = w.charCodeAt(w.length-1);
   return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0; };
 const eunNeun = w => w + (hasJong(w) ? '은' : '는');
 const ieyo    = w => w + (hasJong(w) ? '이에요' : '예요');
+const eulReul = w => w + (hasJong(w) ? '을' : '를');
 
 for(const c of COUNTRIES){
   const x = EXTRA[c.cc];
@@ -83,6 +84,9 @@ for(const c of COUNTRIES){
     add('q_cap_'  + c.cc, `수도가 ${c.cap}인 나라는 어디일까요?`);
     add('q_fact_' + c.cc, `${x.fact}. 어느 나라일까요?`);
     add('ok_' + c.cc,     `${c.ko}, 정답이에요!`);
+    // 지도에서 찾기 — 누를 수 있을 만큼 큰 나라만 (index.html 의 FIND_POOL 과 같은 기준)
+    if(c.b && (c.b[2]-c.b[0]) >= 4 && (c.b[3]-c.b[1]) >= 2.5)
+      add('find_' + c.cc, `${eulReul(c.ko)} 찾아보세요.`);
   }
 }
 for(const p of PLACES){                                             // 대륙 · 바다 · 극지
@@ -91,6 +95,7 @@ for(const p of PLACES){                                             // 대륙 ·
   add('pfact_' + p.id, `${eunNeun(p.ko)} ${p.fact}`);
 }
 add('praise', '참 잘했어요! 별을 하나 받았어요');
+add('findagain', '다시 찾아보세요.');
 
 /* ── 비용 미리보기 ── */
 const chars = jobs.reduce((s, j) => s + j.text.length, 0);
