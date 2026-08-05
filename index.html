@@ -133,7 +133,11 @@
     font-size:30px;color:#fff;transition:opacity .2s}
   .mcard img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
     opacity:0;transition:opacity .2s}
+  .mcard .nmm{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);
+    font-size:clamp(9px,1.9vw,13px);font-weight:800;color:#2a3547;padding:2px 2px 3px;
+    text-align:center;line-height:1.2;opacity:0;transition:opacity .2s;word-break:keep-all}
   .mcard.up img,.mcard.done img{opacity:1}
+  .mcard.up .nmm,.mcard.done .nmm{opacity:1}
   .mcard.up .q,.mcard.done .q{opacity:0}
   .mcard.done{box-shadow:0 0 0 4px #25c26e}
   .mcard.up{box-shadow:0 0 0 4px #ffb01f}
@@ -1058,7 +1062,7 @@ function startMatch(){
   g.style.gridTemplateColumns = 'repeat(4, min(150px, 21vw))';
   g.innerHTML = mCards.map((c, i) =>
     '<div class="mcard" data-i="' + i + '"><img src="' + flagSrc(c) + '" alt="">'
-    + '<span class="q">?</span></div>').join('');
+    + '<span class="nmm">' + c.ko + '</span><span class="q">?</span></div>').join('');
   [...g.children].forEach(el => el.onclick = () => flipCard(el, mCards[+el.dataset.i]));
   $('mprog').textContent = '같은 국기 두 장을 찾아보세요';
   showScreen('matchScreen', '🃏 짝 맞추기');
