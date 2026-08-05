@@ -122,6 +122,35 @@ function bbox(r){
   return [P(Math.min(...xs)), P(Math.min(...ys)), P(Math.max(...xs)), P(Math.max(...ys))];
 }
 
+/* 나라의 실제 넓이 (천 km²) — 지구가 둥근 것을 반영한 구면 넓이 공식 */
+const R_EARTH = 6378137;
+const rad = x => x * Math.PI / 180;
+function ringArea(r){
+  const n = r.length;
+  if(n < 3) return 0;
+  // 날짜변경선(+180 ↔ -180)을 넘어도 끊기지 않게 경도를 이어 붙인다
+  const lon = [r[0][0]];
+  for(let i = 1; i < n; i++){
+    let d = r[i][0] - r[i-1][0];
+    if(d > 180) d -= 360; else if(d < -180) d += 360;
+    lon.push(lon[i-1] + d);
+  }
+  let a = 0;
+  for(let i = 0; i < n; i++){
+    const j = (i + 1) % n;
+    a += rad(lon[j] - lon[i]) * (2 + Math.sin(rad(r[i][1])) + Math.sin(rad(r[j][1])));
+  }
+  return Math.abs(a * R_EARTH * R_EARTH / 2);
+}
+function areaK(g){
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+  let total = 0;
+  for(const poly of polys)
+    for(let i = 0; i < poly.length; i++)
+      total += (i === 0 ? 1 : -1) * ringArea(poly[i]);   // 첫 링은 바깥, 나머지는 구멍
+  return Math.max(0, Math.round(total / 1e6));           // km²
+}
+
 const out = [];
 for(const f of geo.features){
   if(!f.geometry) continue;
@@ -132,7 +161,7 @@ for(const f of geo.features){
   const all = (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates)
     .flatMap(p => p[0]);
   out.push({ id: String(f.id), n: f.properties.name,
-    c: centroid(r), b: bbox(r), fb: bbox(all), d });
+    c: centroid(r), b: bbox(r), fb: bbox(all), ar: areaK(f.geometry), d });
 }
 
 fs.writeFileSync(A + 'world-paths.js', 'const WORLD = ' + JSON.stringify(out) + ';\n', 'utf8');

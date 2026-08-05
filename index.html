@@ -176,6 +176,34 @@
     margin-top:7px;color:#3a4658;line-height:1.25}
   .citem.got .cnm{color:#1ea75d}
 
+  /* ── 큰 나라 작은 나라 ── */
+  #sizeScreen{position:absolute;inset:0;z-index:15;background:#eaf3fb;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;padding:calc(env(safe-area-inset-top) + 74px) 14px 18px;overflow:auto}
+  .spair{display:flex;gap:clamp(12px,4vw,34px);justify-content:center;flex-wrap:wrap}
+  .sitem{width:min(240px,40vw);background:#fff;border-radius:22px;padding:12px 10px;
+    cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.14);text-align:center;
+    border:5px solid transparent;transition:transform .15s}
+  .sitem canvas{width:100%;aspect-ratio:1;display:block}
+  .sitem .snm{font-size:clamp(15px,3.6vw,21px);font-weight:800;margin-top:4px;color:#2a3547}
+  .sitem.ok{border-color:#25c26e;background:#eafbf1;transform:scale(1.04)}
+  .sitem.no{animation:shake .45s}
+  .sitem .sz{font-size:14px;color:#8a95a6;font-weight:700;margin-top:2px;
+    opacity:0;transition:opacity .3s}
+  .sitem.show .sz{opacity:1}
+
+  /* ── 국기 퍼즐 ── */
+  #puzzleScreen{position:absolute;inset:0;z-index:15;background:#eaf3fb;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;padding:calc(env(safe-area-inset-top) + 74px) 14px 18px;overflow:auto}
+  .pzwrap{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);
+    gap:5px;width:min(440px,88vw);aspect-ratio:3/2}
+  .pz{background-size:300% 200%;background-repeat:no-repeat;border-radius:7px;cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,.2);transition:transform .12s}
+  .pz.sel{outline:5px solid #ffb01f;outline-offset:-5px;transform:scale(.94)}
+  .pzwrap.done{gap:0}
+  .pzwrap.done .pz{border-radius:0;box-shadow:none}
+
   /* ── 동물 지도 ── */
   .animal{position:absolute;left:0;top:0;z-index:4;will-change:transform;pointer-events:none;
     font-size:34px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
@@ -278,6 +306,10 @@
           <div class="nm">색깔 찾기</div><div class="dsc">국기 색 고르기</div></button>
         <button class="game" data-g="animal"><div class="ico">🐾</div>
           <div class="nm">동물 찾기</div><div class="dsc">지도에서 동물</div></button>
+        <button class="game" data-g="size"><div class="ico">📏</div>
+          <div class="nm">누가 더 클까</div><div class="dsc">나라 크기 비교</div></button>
+        <button class="game" data-g="puzzle"><div class="ico">🧩</div>
+          <div class="nm">국기 퍼즐</div><div class="dsc">조각 맞추기</div></button>
         <button class="game" data-g="pass"><div class="ico">🎫</div>
           <div class="nm">내 여권</div><div class="dsc">모은 도장 보기</div></button>
       </div>
@@ -294,6 +326,18 @@
     <div class="prog" id="cprog"></div>
     <div class="cq" id="cq"></div>
     <div class="cgrid" id="cgrid"></div>
+  </div>
+
+  <div id="sizeScreen" class="hidden">
+    <div class="prog" id="sprog"></div>
+    <div class="cq">어느 나라가 더 <b>클까요?</b></div>
+    <div class="spair" id="spair"></div>
+  </div>
+
+  <div id="puzzleScreen" class="hidden">
+    <div class="prog" id="zprog"></div>
+    <div class="cq" id="zq"></div>
+    <div class="pzwrap" id="pzwrap"></div>
   </div>
 
   <div id="passScreen" class="hidden">
@@ -818,7 +862,8 @@ const QUIZ_POOL = COUNTRIES.filter(c => QUIZ_CC.indexOf(c.cc) >= 0);
 
 /* ===== 화면 바꾸기 ===== */
 function showScreen(name, title){
-  ['mapScreen','quizScreen','matchScreen','passScreen','colorScreen'].forEach(s =>
+  ['mapScreen','quizScreen','matchScreen','passScreen','colorScreen',
+   'sizeScreen','puzzleScreen'].forEach(s =>
     $(s).classList.toggle('hidden', s !== name));
   $('menuBtn').classList.toggle('hidden', name !== 'mapScreen');
   $('mapBtn').classList.toggle('hidden', name === 'mapScreen');
@@ -840,8 +885,9 @@ $('menuClose').onclick = closeMenu;
 $('menuScreen').onclick = e => { if(e.target === $('menuScreen')) closeMenu(); };
 document.querySelectorAll('.game').forEach(b => b.onclick = () => {
   closeMenu();
-  const go = { quiz: startQuiz, match: startMatch, find: startFind,
-               color: startColor, animal: startAnimal, pass: openPassport }[b.dataset.g];
+  const go = { quiz: startQuiz, match: startMatch, find: startFind, color: startColor,
+               animal: startAnimal, size: startSize, puzzle: startPuzzle,
+               pass: openPassport }[b.dataset.g];
   setTimeout(go, 280);
 });
 $('mapBtn').onclick = () => { endFind(); endAnimal(); showScreen('mapScreen', '🌍 세계 여행'); };
@@ -850,6 +896,133 @@ function startQuiz(){
   qList = shuffle([...QUIZ_POOL]).slice(0,5); qNo = 0;
   showScreen('quizScreen', '🚩 국기 맞히기');
   nextQ();
+}
+
+/* ===== 큰 나라 작은 나라 ===== */
+const SHAPE_BY = new Map(SHAPES.map(s => [s.id, s]));
+// 모양을 그릴 수 있고 아이가 아는 나라만
+const SIZE_POOL = COUNTRIES.filter(c =>
+  QUIZ_CC.indexOf(c.cc) >= 0 && c.b && c.a >= 90000);
+let sRound = 0, sLock = false;
+
+function drawShape(cv, c){
+  const sh = SHAPE_BY.get(c.id); if(!sh) return;
+  const g = cv.getContext('2d');
+  const w = cv.width = cv.clientWidth * 2 || 300, h = cv.height = w;
+  const [x0, y0, x1, y1] = c.b;
+  const s = Math.min(w / (x1 - x0), h / (y1 - y0)) * 0.86;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, w, h);
+  g.setTransform(s, 0, 0, s, w/2 - (x0 + x1)/2 * s, h/2 - (y0 + y1)/2 * s);
+  g.fillStyle = '#cfe8b8'; g.strokeStyle = '#7fae63'; g.lineWidth = 1.4 / s;
+  g.fill(sh.path); g.stroke(sh.path);
+}
+
+function startSize(){ sRound = 0; showScreen('sizeScreen', '📏 누가 더 클까'); nextSize(); }
+
+function nextSize(){
+  if(sRound >= 5) return sizeDone();
+  let a, b, guard = 0;
+  do { a = pick(SIZE_POOL); b = pick(SIZE_POOL); guard++; }
+  while(guard < 200 && (a === b || Math.max(a.a, b.a) / Math.min(a.a, b.a) < 2));
+
+  sLock = false;
+  $('sprog').textContent = (sRound + 1) + ' / 5';
+  const two = shuffle([a, b]);
+  $('spair').innerHTML = two.map((c, i) =>
+    '<div class="sitem" data-i="' + i + '"><canvas></canvas>'
+    + '<div class="snm">' + c.ko + '</div>'
+    + '<div class="sz">' + (Math.round(c.a / 1000) / 10).toLocaleString() + '만 km²</div></div>').join('');
+  const els = [...$('spair').children];
+  els.forEach((el, i) => {
+    drawShape(el.querySelector('canvas'), two[i]);
+    el.onclick = () => {
+      if(sLock) return;
+      const big = two[0].a > two[1].a ? 0 : 1;
+      if(i === big){
+        sLock = true;
+        els.forEach(e => e.classList.add('show'));
+        el.classList.add('ok');
+        say(two[i].ko + '가 더 커요', 'ko-KR', 'name_' + two[i].cc);
+        sRound++; setTimeout(nextSize, 2000);
+      } else {
+        el.classList.add('no');
+        setTimeout(() => el.classList.remove('no'), 500);
+      }
+    };
+  });
+  say('어느 나라가 더 클까요?', 'ko-KR', 'sizeq');
+}
+function sizeDone(){
+  stars++; localStorage.setItem('wm-stars', stars); drawStars();
+  $('sprog').textContent = '';
+  $('spair').innerHTML = '<button class="bigbtn go" id="sAgain">📏 한 번 더</button>'
+                       + '<button class="bigbtn back" id="sDone">🌍 지도로</button>';
+  $('sAgain').onclick = startSize;
+  $('sDone').onclick  = () => $('mapBtn').onclick();
+  say('참 잘했어요! 별을 하나 받았어요', 'ko-KR', 'praise');
+  confetti();
+}
+
+/* ===== 국기 퍼즐 ===== */
+const PZ_COLS = 3, PZ_ROWS = 2, PZ_N = PZ_COLS * PZ_ROWS;
+let zRound = 0, zOrder = [], zSel = -1, zCountry = null, zLock = false;
+
+function startPuzzle(){ zRound = 0; showScreen('puzzleScreen', '🧩 국기 퍼즐'); nextPuzzle(); }
+
+function nextPuzzle(){
+  if(zRound >= 3) return puzzleDone();
+  zCountry = pick(QUIZ_POOL); zSel = -1; zLock = false;
+  do { zOrder = shuffle([...Array(PZ_N).keys()]); }
+  while(zOrder.every((v, i) => v === i));            // 처음부터 완성되면 다시 섞기
+
+  $('zprog').textContent = (zRound + 1) + ' / 3';
+  $('zq').innerHTML = '<b>' + zCountry.ko + '</b> 국기를 맞춰보세요';
+  $('pzwrap').classList.remove('done');
+  drawPuzzle();
+  say(zCountry.ko + ' 국기를 맞춰보세요', 'ko-KR', 'name_' + zCountry.cc);
+}
+
+function drawPuzzle(){
+  const w = $('pzwrap');
+  w.innerHTML = zOrder.map((piece, slot) => {
+    const col = piece % PZ_COLS, row = (piece - col) / PZ_COLS;
+    return '<div class="pz' + (slot === zSel ? ' sel' : '') + '" data-s="' + slot
+      + '" style="background-image:url(' + flagSrc(zCountry) + ');background-position:'
+      + (col * 100/(PZ_COLS-1)) + '% ' + (row * 100/(PZ_ROWS-1)) + '%"></div>';
+  }).join('');
+  [...w.children].forEach(el => el.onclick = () => tapPiece(+el.dataset.s));
+}
+
+function tapPiece(slot){
+  if(zLock) return;
+  if(zSel < 0){ zSel = slot; drawPuzzle(); return; }
+  if(zSel === slot){ zSel = -1; drawPuzzle(); return; }
+  const t = zOrder[zSel]; zOrder[zSel] = zOrder[slot]; zOrder[slot] = t;   // 두 조각 자리 바꾸기
+  zSel = -1;
+  drawPuzzle();
+  if(zOrder.every((v, i) => v === i)){                                     // 다 맞췄다
+    zLock = true;
+    $('pzwrap').classList.add('done');
+    $('zq').innerHTML = '🎉 <b>' + zCountry.ko + '</b> 완성!';
+    say(zCountry.ko, 'ko-KR', 'name_' + zCountry.cc);
+    zRound++; setTimeout(nextPuzzle, 2200);
+  }
+}
+function puzzleDone(){
+  stars++; localStorage.setItem('wm-stars', stars); drawStars();
+  $('zprog').textContent = '';
+  $('zq').innerHTML = '🎉 다 맞췄어요!<br>⭐ 별을 하나 받았어요';
+  const w = $('pzwrap');
+  w.className = 'pzwrap'; w.style.display = 'flex'; w.style.gap = '12px';
+  w.style.aspectRatio = 'auto'; w.style.flexWrap = 'wrap';
+  w.innerHTML = '<button class="bigbtn go" id="zAgain">🧩 한 번 더</button>'
+              + '<button class="bigbtn back" id="zDone">🌍 지도로</button>';
+  const reset = () => { w.style.display = ''; w.style.gap = ''; w.style.aspectRatio = ''; };
+  $('zAgain').onclick = () => { reset(); startPuzzle(); };
+  $('zDone').onclick  = () => { reset(); $('mapBtn').onclick(); };
+  say('참 잘했어요! 별을 하나 받았어요', 'ko-KR', 'praise');
+  confetti();
 }
 
 /* ===== 색깔 찾기 ===== */

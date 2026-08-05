@@ -54,7 +54,12 @@ const SUB  = { 'North America':'북아메리카','South America':'남아메리�
   'Central America':'중앙아메리카','Caribbean':'카리브해' };
 
 const P = n => Math.round(n * 10) / 10;
-const geo = new Map(WORLD.map(w => [w.id, w]));
+// 같은 나라 번호를 쓰는 조각이 여럿이면(예: 호주 ↔ 애시모어 제도) 가장 큰 것을 씁니다
+const geo = new Map();
+for(const w of WORLD){
+  const old = geo.get(w.id);
+  if(!old || w.ar > old.ar) geo.set(w.id, w);
+}
 const rows = [];
 const noCap = [];
 
@@ -70,7 +75,8 @@ for(const c of wc){
     cap: CAP[cc],
     cont: SUB[c.subregion] || CONT[c.region] || c.region,
     p: g ? g.c : [P(c.latlng[1] + 180), P(90 - c.latlng[0])],   // 국기를 놓을 자리
-    b: g ? g.b : null                                            // 지도 모양이 있으면 확대 범위
+    b: g ? g.b : null,                                           // 지도 모양이 있으면 확대 범위
+    a: g ? g.ar : 0                                              // 넓이 (천 km²)
   });
 }
 rows.sort((a, b) => a.ko.localeCompare(b.ko, 'ko'));

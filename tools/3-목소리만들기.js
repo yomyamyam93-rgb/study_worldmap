@@ -99,6 +99,7 @@ add('praise', '참 잘했어요! 별을 하나 받았어요');
 add('findagain', '다시 찾아보세요.');
 add('today',      '오늘의 나라예요.');
 add('animalfind', '동물을 눌러보세요.');
+add('sizeq',      '어느 나라가 더 클까요?');
 for(const c of PLAY_COLORS) add('color_' + c.ko, `${c.adj}이 들어간 국기를 모두 찾아보세요.`);
 add('stampall',  '우와! 이 대륙을 다 모았어요.');
 
