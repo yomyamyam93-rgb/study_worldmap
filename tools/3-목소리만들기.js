@@ -96,6 +96,8 @@ for(const p of PLACES){                                             // 대륙 ·
 }
 add('praise', '참 잘했어요! 별을 하나 받았어요');
 add('findagain', '다시 찾아보세요.');
+add('today',     '오늘의 나라예요.');
+add('stampall',  '우와! 이 대륙을 다 모았어요.');
 
 /* ── 비용 미리보기 ── */
 const chars = jobs.reduce((s, j) => s + j.text.length, 0);

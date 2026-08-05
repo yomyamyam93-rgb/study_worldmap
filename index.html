@@ -148,6 +148,35 @@
     pointer-events:none;animation:fadeout .5s forwards}
   @keyframes fadeout{to{opacity:0}}
 
+  /* ── 여권 (도장 모으기) ── */
+  #passScreen{position:absolute;inset:0;z-index:15;background:#fdf8ee;overflow:auto;
+    padding:calc(env(safe-area-inset-top) + 74px) 16px 28px}
+  .passhead{text-align:center;margin-bottom:6px}
+  .passhead .big{font-size:26px;font-weight:900;color:#6b5a35}
+  .passhead .sub{color:#a08a5e;font-size:15px;font-weight:700;margin-top:4px}
+  .pbar{height:14px;border-radius:8px;background:#eadfc6;max-width:420px;margin:12px auto 0;overflow:hidden}
+  .pbar i{display:block;height:100%;background:#ffb01f;border-radius:8px;transition:width .5s}
+  .pgroup{margin:22px 0 8px;font-size:17px;font-weight:800;color:#a08a5e}
+  .pgroup b{color:#6b5a35}
+  .pgrid{display:flex;flex-wrap:wrap;gap:10px}
+  .ptile{position:relative;width:min(96px,20vw);cursor:pointer}
+  .ptile img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;
+    box-shadow:0 2px 6px rgba(0,0,0,.22)}
+  .ptile .nm{font-size:12px;font-weight:700;margin-top:4px;color:#5b4f3a;line-height:1.25}
+  .ptile.no img{filter:grayscale(1);opacity:.22}
+  .ptile.no .nm{color:#c3b79f}
+  .ptile .st{position:absolute;right:-5px;top:-7px;font-size:19px;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))}
+  .ptile:active{transform:scale(.94)}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(18px);
+    background:#2a3547;color:#fff;border-radius:24px;padding:13px 24px;font-size:17px;
+    font-weight:800;z-index:50;opacity:0;transition:all .25s;pointer-events:none}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .todaytag{display:inline-block;background:#ffb01f;color:#fff;font-size:15px;font-weight:800;
+    border-radius:16px;padding:5px 15px;margin-bottom:10px}
+
   /* ── 놀이 ── */
   #quizScreen{position:absolute;inset:0;z-index:15;background:#eaf3fb;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -211,6 +240,8 @@
           <div class="nm">짝 맞추기</div><div class="dsc">같은 국기 찾기</div></button>
         <button class="game" data-g="find"><div class="ico">🔎</div>
           <div class="nm">지도에서 찾기</div><div class="dsc">나라 위치 찾기</div></button>
+        <button class="game" data-g="pass"><div class="ico">🎫</div>
+          <div class="nm">내 여권</div><div class="dsc">모은 도장 보기</div></button>
       </div>
       <div class="crow"><button class="ghost" id="menuClose">닫기</button></div>
     </div>
@@ -220,6 +251,17 @@
     <div class="prog" id="mprog"></div>
     <div class="mgrid" id="mgrid"></div>
   </div>
+
+  <div id="passScreen" class="hidden">
+    <div class="passhead">
+      <div class="big" id="passCount"></div>
+      <div class="sub">나라를 눌러보면 도장이 찍혀요</div>
+      <div class="pbar"><i id="passBar"></i></div>
+    </div>
+    <div id="passBody"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
 
   <div id="quizScreen" class="hidden">
     <div class="prog" id="qprog"></div>
@@ -681,6 +723,7 @@ function showCard(head, title, sub, emo, lines, name){
 
 function openCard(c){
   const x = EXTRA[c.cc];
+  addStamp(c);                                    // 여권에 도장
   const lines = [
     { k:'🏛️', html:'수도는 <b>'+c.cap+'</b>',
       key:'cap_'+c.cc,  text:`${c.ko}의 수도는 ${ieyo(c.cap)}` },
@@ -717,7 +760,7 @@ const QUIZ_POOL = COUNTRIES.filter(c => QUIZ_CC.indexOf(c.cc) >= 0);
 
 /* ===== 화면 바꾸기 ===== */
 function showScreen(name, title){
-  ['mapScreen','quizScreen','matchScreen'].forEach(s =>
+  ['mapScreen','quizScreen','matchScreen','passScreen'].forEach(s =>
     $(s).classList.toggle('hidden', s !== name));
   $('menuBtn').classList.toggle('hidden', name !== 'mapScreen');
   $('mapBtn').classList.toggle('hidden', name === 'mapScreen');
@@ -739,7 +782,7 @@ $('menuClose').onclick = closeMenu;
 $('menuScreen').onclick = e => { if(e.target === $('menuScreen')) closeMenu(); };
 document.querySelectorAll('.game').forEach(b => b.onclick = () => {
   closeMenu();
-  const go = { quiz: startQuiz, match: startMatch, find: startFind }[b.dataset.g];
+  const go = { quiz: startQuiz, match: startMatch, find: startFind, pass: openPassport }[b.dataset.g];
   setTimeout(go, 280);
 });
 $('mapBtn').onclick = () => { endFind(); showScreen('mapScreen', '🌍 세계 여행'); };
@@ -748,6 +791,109 @@ function startQuiz(){
   qList = shuffle([...QUIZ_POOL]).slice(0,5); qNo = 0;
   showScreen('quizScreen', '🚩 국기 맞히기');
   nextQ();
+}
+
+/* ===== 여권 (도장 모으기) ===== */
+const CONT_ORDER = ['아시아','유럽','아프리카','북아메리카','중앙아메리카',
+                    '카리브해','남아메리카','오세아니아'];
+let visited = new Set(JSON.parse(localStorage.getItem('wm-visited') || '[]'));
+
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('on'), 1900);
+}
+
+// 나라 카드를 열면 도장이 찍힙니다
+function addStamp(c){
+  if(visited.has(c.cc)) return;
+  visited.add(c.cc);
+  localStorage.setItem('wm-visited', JSON.stringify([...visited]));
+
+  const same = COUNTRIES.filter(x => x.cont === c.cont);
+  const got  = same.filter(x => visited.has(x.cc)).length;
+  if(got === same.length){
+    toast('🎉 ' + c.cont + ' 도장을 다 모았어요!');
+    setTimeout(() => say('우와! 이 대륙을 다 모았어요', 'ko-KR', 'stampall'), 2600);
+  } else {
+    toast('🎫 도장을 받았어요!  (' + visited.size + ' / ' + COUNTRIES.length + ')');
+  }
+}
+
+function openPassport(){
+  const total = COUNTRIES.length, got = visited.size;
+  $('passCount').textContent = '🎫 ' + got + ' / ' + total + ' 나라를 여행했어요';
+  $('passBar').style.width = Math.round(got / total * 100) + '%';
+
+  const groups = {};
+  for(const c of COUNTRIES) (groups[c.cont] = groups[c.cont] || []).push(c);
+  const names = Object.keys(groups).sort(
+    (a, b) => CONT_ORDER.indexOf(a) - CONT_ORDER.indexOf(b));
+
+  $('passBody').innerHTML = names.map(g => {
+    const list = groups[g].slice().sort((a, b) => a.ko.localeCompare(b.ko, 'ko'));
+    const n = list.filter(c => visited.has(c.cc)).length;
+    return '<div class="pgroup">' + g + ' <b>' + n + ' / ' + list.length + '</b>'
+      + (n === list.length ? ' 🏆' : '') + '</div><div class="pgrid">'
+      + list.map(c => '<div class="ptile' + (visited.has(c.cc) ? '' : ' no')
+        + '" data-cc="' + c.cc + '"><img src="' + flagSrc(c) + '" alt="">'
+        + (visited.has(c.cc) ? '<span class="st">🎫</span>' : '')
+        + '<div class="nm">' + c.ko + '</div></div>').join('')
+      + '</div>';
+  }).join('');
+
+  $('passBody').querySelectorAll('.ptile').forEach(t => t.onclick = () => {
+    const c = COUNTRIES.find(x => x.cc === t.dataset.cc);
+    if(visited.has(c.cc)) say(c.ko, 'ko-KR', 'name_' + c.cc);
+    else toast('아직 안 가봤어요 — 지도에서 눌러보세요');
+  });
+
+  showScreen('passScreen', '🎫 내 여권');
+}
+
+/* ===== 오늘의 나라 ===== */
+function todayCountry(){
+  const d = new Date();
+  const key = '' + d.getFullYear() + (d.getMonth()+1) + d.getDate();
+  if(localStorage.getItem('wm-today') === key) return;   // 하루에 한 번만
+  localStorage.setItem('wm-today', key);
+
+  let h = 0;
+  for(let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 100000;
+  const c = COUNTRIES[h % COUNTRIES.length];
+  const x = EXTRA[c.cc];
+
+  const el = document.createElement('div');
+  el.className = 'sheet';
+  el.innerHTML = `
+    <div class="card">
+      <div class="todaytag">오늘의 나라</div>
+      <img class="bigflag tapme" src="${flagSrc(c)}" alt="${c.ko} 국기">
+      <div class="cname">${c.ko}</div>
+      <div class="cen">${c.en}</div>
+      <div class="huge">${x ? x.emo : '🌍'}</div>
+      <div class="facts">
+        <div class="fact"><span class="k">🏛️</span><span class="v">수도는 <b>${c.cap}</b></span></div>
+        ${x ? '<div class="fact"><span class="k">✨</span><span class="v">' + x.fact + '</span></div>' : ''}
+      </div>
+      <div class="crow">
+        <button class="ghost" data-close>닫기</button>
+        <button class="primary" data-go>🌍 보러가기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.classList.add('on'), 16);
+
+  const close = () => { el.classList.remove('on'); setTimeout(() => el.remove(), 320); };
+  el.querySelector('.bigflag').onclick = () => say(c.ko, 'ko-KR', 'name_' + c.cc);
+  el.querySelector('[data-close]').onclick = close;
+  el.querySelector('[data-go]').onclick = () => { close(); setTimeout(() => selectCountry(c.id), 340); };
+  el.onclick = e => { if(e.target === el) close(); };
+
+  setTimeout(() => say(c.ko, 'ko-KR', 'name_' + c.cc,
+    () => setTimeout(() => say('오늘의 나라예요', 'ko-KR', 'today'), 200)), 500);
 }
 
 /* ===== 짝 맞추기 ===== */
@@ -923,6 +1069,7 @@ drawStars();
 measure();
 resetCam();
 render();
+setTimeout(todayCountry, 900);          // 하루에 한 번, 오늘의 나라 소개
 setTimeout(() => { $('zoomhint').style.opacity = 0; }, 6000);
 </script>
 </body>
