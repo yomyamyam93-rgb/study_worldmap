@@ -1,0 +1,16 @@
+{
+  "name": "세계 여행 — 나라와 수도",
+  "short_name": "세계여행",
+  "description": "지도에서 나라를 눌러 국기·수도·이야기를 듣는 아이용 앱",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#e9f3fa",
+  "theme_color": "#a9d9f0",
+  "lang": "ko",
+  "icons": [
+    { "src": "assets/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
