@@ -676,7 +676,7 @@ function eatFood(f, el){
     feed.sani.innerHTML = saniSVG('yum');
     feed.sani.classList.add('cheek');
     setTimeout(() => feed.sani.classList.remove('cheek'), 1300);
-    say('냠냠냠!', 's_yum', () => say(f.n + '! 정답이야!', 'w_' + f.n));
+    say(f.n + '! 정답이야!', 'w_' + f.n);
     setTimeout(() => feed.sani.innerHTML = saniSVG('open'), 1500);
   } else {
     say('우웩! 이건 아니야!', 's_yuck');
