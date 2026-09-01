@@ -697,27 +697,40 @@ function scheduleRender(){
 }
 
 let anim = null, animEnd = null;
-function flyTo(tx, ty, ts, ms){
+
+/* 지도를 부드럽게 옮기고 확대합니다.  cx,cy = 화면 한가운데에 올 세계 좌표.
+   배율은 1→2→4 처럼 곱해 가며 키우고, 화면 가운데 점도 똑같은 곡선을 따라
+   움직입니다. 둘 중 하나만 다른 곡선을 쓰면 확대가 이상하게 보입니다. */
+function flyTo(cx, cy, ts, ms){
   if(anim) cancelAnimationFrame(anim);
   if(animEnd) clearTimeout(animEnd);
   if(typeof stopGlide === 'function') stopGlide();
-  const from = { ...cam }, t0 = performance.now(), dur = ms || 520;
-  let dx = (tx - from.x) % 360;                 // 이어진 지도라 가까운 쪽으로 돈다
+
+  const s0 = cam.s, x0 = cam.x + (BW/cam.s)/2, y0 = cam.y + (BH/cam.s)/2;
+  let dx = (cx - x0) % 360;                     // 이어진 지도라 가까운 쪽으로 돈다
   if(dx > 180) dx -= 360; else if(dx < -180) dx += 360;
+  const dy = cy - y0, t0 = performance.now(), dur = ms || 520;
   let done = false;
+
+  const put = e => {
+    cam.s = s0 * Math.pow(ts / s0, e);
+    cam.x = x0 + dx * e - (BW/cam.s)/2;
+    cam.y = y0 + dy * e - (BH/cam.s)/2;
+    render();
+  };
+  // 천천히 출발해서 가운데서 빨라지고 다시 천천히 멈춘다 (슈우우웅)
+  const ease = r => r < .5 ? 4*r*r*r : 1 - Math.pow(2 - 2*r, 3)/2;
+
   (function step(now){
     const r = Math.min(1, (now - t0) / dur);
-    const e = 1 - Math.pow(1 - r, 3);
-    cam.x = from.x + dx * e;
-    cam.y = from.y + (ty - from.y) * e;
-    cam.s = from.s + (ts - from.s) * e;
-    render();
+    put(ease(r));
     if(r < 1) anim = requestAnimationFrame(step); else done = true;
   })(performance.now());
+
   animEnd = setTimeout(() => {                  // 애니메이션이 멈춰도 목적지에 도착하게
     if(done) return;
     if(anim) cancelAnimationFrame(anim);
-    cam.x = tx; cam.y = ty; cam.s = ts; render();
+    put(1);
   }, dur + 80);
 }
 /* ================= 손가락 조작 ================= */
@@ -851,8 +864,8 @@ box.addEventListener('wheel', e => {                 // 컴퓨터에서 확인�
 
 $('resetBtn').onclick = () => {
   clearSel();
-  const s = fitScale(), vh = BH/s;
-  flyTo(0, (180-vh)/2, s);
+  const s = fitScale();
+  flyTo((BW/s)/2, 90, s);
 };
 window.addEventListener('resize', () => { measure(); render(); });
 
@@ -1452,8 +1465,7 @@ function findHelp(){
   if(findHint === 1)                                   // 1단계 · 어느 대륙인지
     return say(eunNeun(c.ko) + ' ' + c.cont + '에 있어요', 'ko-KR', 'cont_' + c.cc);
   if(findHint === 2){                                  // 2단계 · 그 근처로 지도를 확대
-    const ts = fitScale() * 3.2;
-    flyTo(c.p[0] - (BW/ts)/2, c.p[1] - (BH/ts)/2, ts, 700);
+    flyTo(c.p[0], c.p[1], fitScale() * 3.2, 1400);      // 슈우우웅 하고 천천히
     return say(eulReul(c.ko) + ' 찾아보세요', 'ko-KR', 'find_' + c.cc);
   }
   let n = 0;                                           // 3단계 · 나라를 노랗게 깜빡인다
