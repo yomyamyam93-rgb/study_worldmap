@@ -439,7 +439,7 @@ const box = $('stagebox'), cv = $('map'), ctx = cv.getContext('2d');
 const DPR = Math.min(2, window.devicePixelRatio || 1);
 
 // 나라 모양을 Path2D 로 미리 만들어 둔다 (매번 다시 해석하지 않도록)
-const SHAPES = WORLD.map(w => ({ id: w.id, path: new Path2D(w.d), fb: w.fb }));
+const SHAPES = WORLD.map(w => ({ id: w.id, path: new Path2D(w.d), fb: w.fb, ar: w.ar }));
 
 const COL = { sea:'#a9d9f0', land:'#cfe8b8', line:'#8fbc72', sel:'#ffd166', selLine:'#dd9c22' };
 
@@ -899,7 +899,12 @@ function startQuiz(){
 }
 
 /* ===== 큰 나라 작은 나라 ===== */
-const SHAPE_BY = new Map(SHAPES.map(s => [s.id, s]));
+// 같은 번호가 둘 이상이면 넓은 쪽만 (호주 번호를 애시모어섬이 덮어써서 모양이 안 나오던 문제)
+const SHAPE_BY = new Map();
+for(const s of SHAPES){
+  const prev = SHAPE_BY.get(s.id);
+  if(!prev || s.ar > prev.ar) SHAPE_BY.set(s.id, s);
+}
 // 모양을 그릴 수 있고 아이가 아는 나라만
 const SIZE_POOL = COUNTRIES.filter(c =>
   QUIZ_CC.indexOf(c.cc) >= 0 && c.b && c.a >= 90000);
