@@ -403,17 +403,24 @@ function sayBuiltIn(t, l, done){
     speechSynthesis.speak(u);
   }catch(e){ if(done) done(); }
 }
+let sayNo = 0;
 function say(t, l, key, done){
   if(!key) return sayBuiltIn(t, l, done);
   try{ speechSynthesis.cancel(); }catch(e){}
   player.pause();
 
+  const my = ++sayNo;                        // 이번에 말할 차례 번호
   let fell = false;
-  const fallback = () => { if(fell) return; fell = true; sayBuiltIn(t, l, done); };
+  // 음성 파일이 아예 없을 때만 기본 목소리로. 다음 말이 시작돼서 끊긴 것이면
+  // 그냥 넘어갑니다 (예전 기계 목소리가 녹음 위에 겹쳐 들리던 문제)
+  const fallback = () => {
+    if(fell || my !== sayNo) return;
+    fell = true; sayBuiltIn(t, l, done);
+  };
   player.onended = done || null;
-  player.onerror = fallback;                 // 음성 파일이 없으면 기본 목소리로
+  player.onerror = fallback;
   player.src = 'assets/voice/' + key + '.mp3';
-  player.play().catch(fallback);
+  player.play().catch(e => { if(!e || e.name !== 'AbortError') fallback(); });
 }
 // 여러 문장을 차례로 읽어 줍니다
 function sayAll(list, i){
