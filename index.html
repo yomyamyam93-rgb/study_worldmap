@@ -517,33 +517,86 @@ for(const w of WORLD){
 COUNTRIES.forEach(c => { if(!c.b) TINY.push({ id: c.id, pts: [c.p], big: 0 }); });
 const DOT = 5;                                // 점 지름(px) — 이보다 작아지면 점으로 바뀐다
 
+/* 지도 한 벌을 통째로 그리는 부분 — 화면용에도, 미리 그려 두는 그림에도 씁니다 */
+function paintWorld(g, dpr){
+  const s = cam.s * dpr;
+  g.setTransform(s, 0, 0, s, 0, 0);
+  g.lineJoin = 'round';
+  g.lineWidth = 0.7 / cam.s;                  // 확대해도 선 굵기 그대로
+  g.strokeStyle = COL.line;
+  for(const sh of SHAPES){
+    const on = sh.id === selected;
+    g.fillStyle = on ? COL.sel : COL.land;
+    g.fill(sh.path);
+    if(on){ g.strokeStyle = COL.selLine; g.lineWidth = 1.6 / cam.s; }
+    g.stroke(sh.path);
+    if(on){ g.strokeStyle = COL.line; g.lineWidth = 0.7 / cam.s; }
+  }
+  // 작은 섬나라가 아예 안 보이지 않도록 점으로라도 찍어 준다
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  for(const t of TINY){
+    if(t.big * cam.s >= DOT) continue;         // 이미 눈에 보일 만큼 크게 그려졌다
+    g.fillStyle = t.id === selected ? COL.sel : COL.land;
+    for(const q of t.pts){
+      g.beginPath();
+      g.arc(q[0] * cam.s * dpr, q[1] * cam.s * dpr, DOT/2 * dpr, 0, 6.2832);
+      g.fill();
+    }
+  }
+}
+
+/* 지도를 한 장 미리 그려 두고 붙이면 손가락으로 훑을 때 훨씬 부드럽습니다.
+   많이 확대하면 그림이 너무 커지므로, 그때는 보이는 것만 그때그때 그립니다. */
+const PIC_MAX = 2600;                          // 미리 그려 둘 수 있는 최대 가로 픽셀
+let mapPic = null, mapKey = '';
+
+function worldPic(w, h){
+  const key = w + '|' + selected;
+  if(mapPic && mapKey === key) return mapPic;
+  const oc = mapPic && mapPic.width === w && mapPic.height === h ? mapPic
+           : Object.assign(document.createElement('canvas'), { width:w, height:h });
+  const g = oc.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h);
+  paintWorld(g, DPR);
+  mapPic = oc; mapKey = key;
+  return oc;
+}
+
 function drawMap(){
-  const s = cam.s * DPR;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = COL.sea;
   ctx.fillRect(0, 0, cv.width, cv.height);
+
+  const pw = Math.round(360 * cam.s * DPR), ph = Math.round(180 * cam.s * DPR);
+  if(pw <= PIC_MAX){                           // 미리 그려 둔 그림을 좌우로 이어 붙인다
+    const pic = worldPic(pw, ph);
+    const y = -cam.y * cam.s * DPR;
+    for(let x = -cam.x * cam.s * DPR; x < cv.width; x += pw) ctx.drawImage(pic, x, y);
+    return;
+  }
+  mapPic = null; mapKey = '';                  // 많이 확대했으면 그림은 버린다
+
+  const s = cam.s * DPR, vw = BW/cam.s, vh = BH/cam.s;
   ctx.lineJoin = 'round';
-  const vw = BW/cam.s, vh = BH/cam.s;
   // 화면 오른쪽 끝까지 세계 지도를 한 벌씩 이어 붙인다 (끝이 없어 보이도록)
   for(let ox = 0; ox < cam.x + vw; ox += 360){
     ctx.setTransform(s, 0, 0, s, (ox - cam.x) * s, -cam.y * s);
-    ctx.lineWidth = 0.7 / s * DPR;              // 확대해도 선 굵기 그대로
+    ctx.lineWidth = 0.7 / cam.s;
     ctx.strokeStyle = COL.line;
     for(const sh of SHAPES){
-      const f = sh.fb;                          // 화면 밖 나라는 건너뛴다
+      const f = sh.fb;                         // 화면 밖 나라는 건너뛴다
       if(f[2] + ox < cam.x || f[0] + ox > cam.x + vw || f[3] < cam.y || f[1] > cam.y + vh) continue;
       const on = sh.id === selected;
       ctx.fillStyle = on ? COL.sel : COL.land;
       ctx.fill(sh.path);
-      if(on){ ctx.strokeStyle = COL.selLine; ctx.lineWidth = 1.6 / s * DPR; }
+      if(on){ ctx.strokeStyle = COL.selLine; ctx.lineWidth = 1.6 / cam.s; }
       ctx.stroke(sh.path);
-      if(on){ ctx.strokeStyle = COL.line; ctx.lineWidth = 0.7 / s * DPR; }
+      if(on){ ctx.strokeStyle = COL.line; ctx.lineWidth = 0.7 / cam.s; }
     }
   }
-  // 작은 섬나라가 아예 안 보이지 않도록 점으로라도 찍어 준다
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   for(const t of TINY){
-    if(t.big * cam.s >= DOT) continue;         // 이미 눈에 보일 만큼 크게 그려졌다
+    if(t.big * cam.s >= DOT) continue;
     ctx.fillStyle = t.id === selected ? COL.sel : COL.land;
     for(const q of t.pts){
       const sx = wrapDX(q[0]) * cam.s * DPR, sy = (q[1] - cam.y) * cam.s * DPR;
@@ -561,6 +614,20 @@ COUNTRIES.forEach(c => {
   if(QUIZ_CC.indexOf(c.cc) >= 0) p.dataset.feat = '1';   // 잘 알려진 나라는 항상 보이게
   box.appendChild(p);
   pins.set(c.id, p);
+});
+
+/* 가장 가까운 이웃 나라 국기까지의 거리. 태평양 섬나라처럼 주변이 한적하면
+   작아도 국기가 겹치지 않으므로 확대하기 전부터 보여 줄 수 있습니다. */
+const NEAR = new Map();
+COUNTRIES.forEach(a => {
+  let best = 999;
+  for(const b of COUNTRIES){
+    if(b === a) continue;
+    let dx = Math.abs(a.p[0] - b.p[0]); if(dx > 180) dx = 360 - dx;
+    const d = Math.hypot(dx, a.p[1] - b.p[1]);
+    if(d < best) best = d;
+  }
+  NEAR.set(a.id, best);
 });
 
 /* 대륙 · 바다 · 극지 이름표 */
@@ -595,15 +662,16 @@ function render(){
     const out = sx < 16 || sy < 34 || sx > BW - 16 || sy > BH - 14;   // 위쪽은 이름표 자리만큼 더
     const wide = c.b ? (c.b[2] - c.b[0]) * cam.s : 0;
     const show = !animalMode && !out
-      && (p.dataset.feat === '1' || wide >= 34 || z >= 2.2 || id === selected);
+      && (p.dataset.feat === '1' || wide >= 34 || z >= 2.2 || id === selected
+          || NEAR.get(id) * cam.s >= 36);      // 이웃과 멀찍이 떨어져 있으면 작아도 보여 준다
     if(!show){ if(p.style.display !== 'none') p.style.display = 'none'; return; }
     if(p.style.display === 'none') p.style.display = '';
     p._sx = sx; p._sy = sy;                       // 국기 누름 판정에 씀
     // 이름표가 화면 좌우로 잘리지 않게 안쪽으로 밀어 준다
     const half = c.ko.length * 6 + 9;
-    const nx = sx - half < 2 ? 2 - (sx - half)
-             : sx + half > BW - 2 ? BW - 2 - (sx + half) : 0;
-    p.style.setProperty('--nx', nx.toFixed(1) + 'px');
+    const nx = Math.round(sx - half < 2 ? 2 - (sx - half)
+             : sx + half > BW - 2 ? BW - 2 - (sx + half) : 0);
+    if(p._nx !== nx){ p._nx = nx; p.style.setProperty('--nx', nx + 'px'); }
     p.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0)';
   });
   animals.forEach((d, id) => {                 // 동물 찾기 모드일 때만 보임
