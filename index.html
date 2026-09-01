@@ -386,21 +386,32 @@
 /* ===== 자동 업데이트 =====
    앱을 열 때마다 version.json 을 확인합니다. 번호가 달라졌으면 저장해 둔 파일을
    비우고 한 번만 새로고침해서 새 내용을 받아옵니다. (인터넷이 없으면 그냥 넘어감) */
+const BUILT = '20260901-112521';   /* 이 화면이 몇 번 판인지 — tools/5-버전올리기.js 가 고쳐 줍니다 */
+
 if('serviceWorker' in navigator && location.protocol.indexOf('http') === 0){
   navigator.serviceWorker.register('sw.js').catch(() => {});
   fetch('version.json', { cache:'no-store' })
     .then(r => r.json())
     .then(async info => {
-      const seen = localStorage.getItem('wm-ver');
-      if(seen && seen !== info.v && !sessionStorage.getItem('wm-reloaded')){
-        sessionStorage.setItem('wm-reloaded', '1');
-        localStorage.setItem('wm-ver', info.v);
-        const reg = await navigator.serviceWorker.getRegistration();
-        if(reg && reg.active) reg.active.postMessage('clear');
-        setTimeout(() => location.reload(), 400);
-        return;
+      if(info.v === BUILT) return;                 // 지금 열린 화면이 최신이면 그대로
+
+      // 같은 번호로 두 번 새로고침하지 않게 (한 번 해 보고 안 되면 다음에 다시)
+      const tried = 'wm-try-' + info.v;
+      if(sessionStorage.getItem(tried)) return;
+      sessionStorage.setItem(tried, '1');
+
+      const reg = await navigator.serviceWorker.getRegistration();
+      if(reg && reg.active){
+        // 저장분을 다 비운 뒤에 새로고침해야 합니다. 안 그러면 옛 파일을 또 씁니다.
+        await new Promise(done => {
+          const t = setTimeout(done, 4000);
+          navigator.serviceWorker.addEventListener('message', e => {
+            if(e.data === 'cleared'){ clearTimeout(t); done(); }
+          }, { once:true });
+          reg.active.postMessage('clear');
+        });
       }
-      localStorage.setItem('wm-ver', info.v);
+      location.reload();
     })
     .catch(() => {});
 }
