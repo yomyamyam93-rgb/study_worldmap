@@ -109,13 +109,24 @@ function biggest(g){
   return best;
 }
 function centroid(r){
+  /* 날짜변경선을 넘는 나라(러시아)는 경도가 +180 ↔ -180 으로 튀어서
+     그냥 계산하면 중심이 엉뚱한 곳(베링해)으로 나옵니다.
+     넓이 계산과 똑같이 경도를 이어 붙여 구한 뒤 -180~180 으로 되돌립니다. */
+  const lon = [r[0][0]];
+  for(let i = 1; i < r.length; i++){
+    let d = r[i][0] - r[i-1][0];
+    if(d > 180) d -= 360; else if(d < -180) d += 360;
+    lon.push(lon[i-1] + d);
+  }
   let a = 0, cx = 0, cy = 0;
   for(let i = 0; i < r.length - 1; i++){
-    const cr = r[i][0]*r[i+1][1] - r[i+1][0]*r[i][1];
-    a += cr; cx += (r[i][0]+r[i+1][0])*cr; cy += (r[i][1]+r[i+1][1])*cr;
+    const cr = lon[i]*r[i+1][1] - lon[i+1]*r[i][1];
+    a += cr; cx += (lon[i]+lon[i+1])*cr; cy += (r[i][1]+r[i+1][1])*cr;
   }
   a /= 2;
-  return [Math.round(X(cx/(6*a))*10)/10, Math.round(Y(cy/(6*a))*10)/10];
+  let lo = cx/(6*a);
+  lo = ((lo + 180) % 360 + 360) % 360 - 180;
+  return [Math.round(X(lo)*10)/10, Math.round(Y(cy/(6*a))*10)/10];
 }
 function bbox(r){
   const xs = r.map(p => X(p[0])), ys = r.map(p => Y(p[1]));
