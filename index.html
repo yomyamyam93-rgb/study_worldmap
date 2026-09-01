@@ -48,13 +48,12 @@
   .pin.sel .in{transform:translate(-50%,-50%) scale(1.32)}
   .pin img{width:30px;height:22px;object-fit:cover;display:block;
     box-shadow:0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35);background:#fff}
-  /* 나라 이름은 국기 오른쪽에 */
-  .pin b{position:absolute;left:19px;top:50%;transform:translateY(-50%);
+  /* 나라 이름은 국기 위쪽에 — 서로 겹치더라도 감추지 않습니다 */
+  .pin b{position:absolute;left:50%;bottom:calc(100% + 4px);
+    transform:translateX(calc(-50% + var(--nx,0px)));
     font-size:12px;font-weight:800;color:#2c3b52;white-space:nowrap;
     background:rgba(255,255,255,.88);border-radius:8px;padding:2px 7px;
-    box-shadow:0 1px 3px rgba(0,0,0,.15);
-    opacity:0;transition:opacity .15s;pointer-events:none}
-  .pin.named b,.pin.sel b{opacity:1}
+    box-shadow:0 1px 3px rgba(0,0,0,.15);pointer-events:none}
 
   /* 대륙 · 바다 · 극지 이름 */
   .place{position:absolute;left:0;top:0;z-index:2;will-change:transform;pointer-events:none;
@@ -460,10 +459,12 @@ const zoom = () => cam.s / fitScale();                  // 몇 배로 확대했�
 function clampCam(){
   const min = fitScale();
   cam.s = Math.min(min * 40, Math.max(min, cam.s));
-  const vw = BW/cam.s, vh = BH/cam.s;
-  cam.x = vw >= 360 ? (360 - vw)/2 : Math.min(360 - vw, Math.max(0, cam.x));
+  const vh = BH/cam.s;
+  cam.x = ((cam.x % 360) + 360) % 360;        // 동서로는 끝이 없다 (지구는 둥그니까)
   cam.y = vh >= 180 ? (180 - vh)/2 : Math.min(180 - vh, Math.max(0, cam.y));
 }
+/* 세계 좌표 wx 가 지금 화면 왼쪽에서 얼마나 떨어져 있는지 (한 바퀴 돌려서 계산) */
+const wrapDX = wx => { const d = (wx - cam.x) % 360; return d < 0 ? d + 360 : d; };
 function resetCam(){ cam.s = fitScale(); cam.x = 0; cam.y = 0; clampCam(); }
 
 function drawMap(){
@@ -471,20 +472,23 @@ function drawMap(){
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = COL.sea;
   ctx.fillRect(0, 0, cv.width, cv.height);
-  ctx.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
   ctx.lineJoin = 'round';
-  ctx.lineWidth = 0.7 / s * DPR;              // 확대해도 선 굵기 그대로
-  ctx.strokeStyle = COL.line;
   const vw = BW/cam.s, vh = BH/cam.s;
-  for(const sh of SHAPES){
-    const f = sh.fb;                            // 화면 밖 나라는 건너뛴다
-    if(f[2] < cam.x || f[0] > cam.x + vw || f[3] < cam.y || f[1] > cam.y + vh) continue;
-    const on = sh.id === selected;
-    ctx.fillStyle = on ? COL.sel : COL.land;
-    ctx.fill(sh.path);
-    if(on){ ctx.strokeStyle = COL.selLine; ctx.lineWidth = 1.6 / s * DPR; }
-    ctx.stroke(sh.path);
-    if(on){ ctx.strokeStyle = COL.line; ctx.lineWidth = 0.7 / s * DPR; }
+  // 화면 오른쪽 끝까지 세계 지도를 한 벌씩 이어 붙인다 (끝이 없어 보이도록)
+  for(let ox = 0; ox < cam.x + vw; ox += 360){
+    ctx.setTransform(s, 0, 0, s, (ox - cam.x) * s, -cam.y * s);
+    ctx.lineWidth = 0.7 / s * DPR;              // 확대해도 선 굵기 그대로
+    ctx.strokeStyle = COL.line;
+    for(const sh of SHAPES){
+      const f = sh.fb;                          // 화면 밖 나라는 건너뛴다
+      if(f[2] + ox < cam.x || f[0] + ox > cam.x + vw || f[3] < cam.y || f[1] > cam.y + vh) continue;
+      const on = sh.id === selected;
+      ctx.fillStyle = on ? COL.sel : COL.land;
+      ctx.fill(sh.path);
+      if(on){ ctx.strokeStyle = COL.selLine; ctx.lineWidth = 1.6 / s * DPR; }
+      ctx.stroke(sh.path);
+      if(on){ ctx.strokeStyle = COL.line; ctx.lineWidth = 0.7 / s * DPR; }
+    }
   }
 }
 
@@ -497,15 +501,6 @@ COUNTRIES.forEach(c => {
   box.appendChild(p);
   pins.set(c.id, p);
 });
-
-/* 이름표를 붙일 순서 — 소개글 있는 나라 먼저, 그다음 큰 나라부터.
-   자리를 먼저 차지한 이름이 이기고, 겹치는 이름은 숨겨서 지도가 지저분해지지 않게 한다. */
-const LABEL_ORDER = COUNTRIES.slice().sort((a, b) => {
-  const fa = QUIZ_CC.indexOf(a.cc) >= 0 ? 1 : 0, fb = QUIZ_CC.indexOf(b.cc) >= 0 ? 1 : 0;
-  if(fa !== fb) return fb - fa;
-  const wa = a.b ? (a.b[2]-a.b[0]) : 0, wb = b.b ? (b.b[2]-b.b[0]) : 0;
-  return wb - wa;
-}).map(c => c.id);
 
 /* 대륙 · 바다 · 극지 이름표 */
 const places = new Map();
@@ -525,7 +520,7 @@ function render(){
   const z = zoom();
   places.forEach((d, id) => {
     const pl = PLACE_BY.get(id);
-    const sx = (pl.p[0] - cam.x) * cam.s, sy = (pl.p[1] - cam.y) * cam.s;
+    const sx = wrapDX(pl.p[0]) * cam.s, sy = (pl.p[1] - cam.y) * cam.s;
     const w = d.firstChild.offsetWidth / 2 + 6, h = 16;
     // 글자가 화면 밖으로 잘리면 아예 감춥니다
     const out = sx - w < 2 || sy - h < 2 || sx + w > BW - 2 || sy + h > BH - 2;
@@ -535,50 +530,31 @@ function render(){
   });
   pins.forEach((p, id) => {
     const c = BY.get(id);
-    const sx = (c.p[0] - cam.x) * cam.s, sy = (c.p[1] - cam.y) * cam.s;
-    const out = sx < 16 || sy < 14 || sx > BW - 16 || sy > BH - 14;
+    const sx = wrapDX(c.p[0]) * cam.s, sy = (c.p[1] - cam.y) * cam.s;
+    const out = sx < 16 || sy < 34 || sx > BW - 16 || sy > BH - 14;   // 위쪽은 이름표 자리만큼 더
     const wide = c.b ? (c.b[2] - c.b[0]) * cam.s : 0;
     const show = !animalMode && !out
       && (p.dataset.feat === '1' || wide >= 34 || z >= 2.2 || id === selected);
     if(!show){ if(p.style.display !== 'none') p.style.display = 'none'; return; }
     if(p.style.display === 'none') p.style.display = '';
     p._sx = sx; p._sy = sy;                       // 국기 누름 판정에 씀
+    // 이름표가 화면 좌우로 잘리지 않게 안쪽으로 밀어 준다
+    const half = c.ko.length * 6 + 9;
+    const nx = sx - half < 2 ? 2 - (sx - half)
+             : sx + half > BW - 2 ? BW - 2 - (sx + half) : 0;
+    p.style.setProperty('--nx', nx.toFixed(1) + 'px');
     p.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0)';
   });
   animals.forEach((d, id) => {                 // 동물 찾기 모드일 때만 보임
     if(!animalMode){ d.classList.add('hidden'); return; }
     const c = BY.get(id);
-    const sx = (c.p[0] - cam.x) * cam.s, sy = (c.p[1] - cam.y) * cam.s;
+    const sx = wrapDX(c.p[0]) * cam.s, sy = (c.p[1] - cam.y) * cam.s;
     const out = sx < 18 || sy < 18 || sx > BW - 18 || sy > BH - 18;
     d.classList.toggle('hidden', out);
     if(!out){ d._sx = sx; d._sy = sy;
       d.style.transform = 'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0)'; }
   });
-  placeLabels();
   $('resetBtn').classList.toggle('hidden', z < 1.15);
-}
-
-function placeLabels(){
-  const taken = [];                               // 이미 자리를 차지한 영역들
-  const overlap = (r) => {
-    for(const t of taken)
-      if(r[0] < t[2] && r[2] > t[0] && r[1] < t[3] && r[3] > t[1]) return true;
-    return false;
-  };
-  // 국기 자체는 무조건 자리를 차지한다 (이름이 다른 국기를 가리지 않게)
-  pins.forEach(p => {
-    if(p.style.display === 'none') return;
-    taken.push([p._sx - 16, p._sy - 12, p._sx + 16, p._sy + 12]);
-  });
-  for(const id of LABEL_ORDER){
-    const p = pins.get(id);
-    if(!p || p.style.display === 'none'){ if(p) p.classList.remove('named'); continue; }
-    const w = BY.get(id).ko.length * 12 + 16, h = 18;
-    const r = [p._sx + 18, p._sy - h/2, p._sx + 18 + w, p._sy + h/2];
-    if(r[2] > BW || overlap(r)){ p.classList.remove('named'); continue; }
-    taken.push(r);
-    p.classList.add('named');
-  }
 }
 
 /* 손가락이 움직일 때마다 그리면 렉이 걸린다. 화면 새로고침에 맞춰 한 번만 그린다. */
@@ -597,11 +573,13 @@ function flyTo(tx, ty, ts, ms){
   if(animEnd) clearTimeout(animEnd);
   if(typeof stopGlide === 'function') stopGlide();
   const from = { ...cam }, t0 = performance.now(), dur = ms || 520;
+  let dx = (tx - from.x) % 360;                 // 이어진 지도라 가까운 쪽으로 돈다
+  if(dx > 180) dx -= 360; else if(dx < -180) dx += 360;
   let done = false;
   (function step(now){
     const r = Math.min(1, (now - t0) / dur);
     const e = 1 - Math.pow(1 - r, 3);
-    cam.x = from.x + (tx - from.x) * e;
+    cam.x = from.x + dx * e;
     cam.y = from.y + (ty - from.y) * e;
     cam.s = from.s + (ts - from.s) * e;
     render();
@@ -668,9 +646,12 @@ function placeAt(clientX, clientY){
 // 화면에서 누른 곳이 어느 나라인지 (canvas 도형으로 직접 판정)
 function countryAt(clientX, clientY){
   const r = box.getBoundingClientRect();
-  const px = (clientX - r.left) * DPR, py = (clientY - r.top) * DPR;
+  const raw = cam.x + (clientX - r.left) / cam.s;
+  const wx = ((raw % 360) + 360) % 360;                     // 이어 붙인 지도라 0~360 안으로
+  const wy = cam.y + (clientY - r.top) / cam.s;
   const s = cam.s * DPR;
-  ctx.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  const px = wx * s, py = wy * s;
   for(let i = SHAPES.length - 1; i >= 0; i--){
     if(ctx.isPointInPath(SHAPES[i].path, px, py)) return SHAPES[i].id;
   }
@@ -741,8 +722,8 @@ box.addEventListener('wheel', e => {                 // 컴퓨터에서 확인�
 
 $('resetBtn').onclick = () => {
   clearSel();
-  const s = fitScale(), vw = BW/s, vh = BH/s;
-  flyTo((360-vw)/2, (180-vh)/2, s);
+  const s = fitScale(), vh = BH/s;
+  flyTo(0, (180-vh)/2, s);
 };
 window.addEventListener('resize', () => { measure(); render(); });
 
