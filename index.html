@@ -152,6 +152,9 @@
     font-size:20px;font-weight:800;white-space:nowrap;display:flex;align-items:center;gap:12px}
   #findBar .n{color:#2e9bff}
   #findBar small{font-size:14px;color:#8a95a6;font-weight:700}
+  #hintBtn{border:0;font-family:inherit;font-size:16px;font-weight:800;color:#fff;
+    background:#ffb01f;border-radius:16px;padding:9px 15px;cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,.18)}
   .wrongflash{position:fixed;inset:0;z-index:35;background:rgba(255,90,90,.28);
     pointer-events:none;animation:fadeout .5s forwards}
   @keyframes fadeout{to{opacity:0}}
@@ -288,7 +291,7 @@
       <div class="zoomhint" id="zoomhint">손가락 두 개로 늘리면 커져요 · 나라를 눌러보세요</div>
       <button class="reset hidden" id="resetBtn">🌍 전체보기</button>
     </div>
-    <div id="findBar" class="hidden"><span id="findText"></span><small id="findProg"></small></div>
+    <div id="findBar" class="hidden"><span id="findText"></span><small id="findProg"></small><button id="hintBtn" class="hidden">🔍 힌트</button></div>
   </div>
 
   <div id="menuScreen" class="hidden">
@@ -474,6 +477,30 @@ function clampCam(){
 const wrapDX = wx => { const d = (wx - cam.x) % 360; return d < 0 ? d + 360 : d; };
 function resetCam(){ cam.s = fitScale(); cam.x = 0; cam.y = 0; clampCam(); }
 
+/* 화면에서 너무 작아 안 보이는 나라 — 섬 하나하나의 가운데를 미리 구해 둔다.
+   넓은 나라는 늘 보이므로 작은 나라만 계산한다. */
+const TINY = [];
+for(const w of WORLD){
+  const c = BY.get(w.id);
+  if(!c || c.a >= 100000) continue;
+  const pts = [];
+  let big = 0;
+  for(const part of w.d.split('M').slice(1)){
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    part.replace(/(-?[\d.]+),(-?[\d.]+)/g, (m, a, b) => {
+      const x = +a, y = +b;
+      if(x < x0) x0 = x; if(x > x1) x1 = x;
+      if(y < y0) y0 = y; if(y > y1) y1 = y;
+    });
+    pts.push([(x0 + x1)/2, (y0 + y1)/2]);
+    big = Math.max(big, x1 - x0, y1 - y0);
+  }
+  TINY.push({ id: w.id, pts, big });
+}
+// 투발루처럼 지도 자료에 모양이 아예 없는 나라는 국기 자리에 점을 찍는다
+COUNTRIES.forEach(c => { if(!c.b) TINY.push({ id: c.id, pts: [c.p], big: 0 }); });
+const DOT = 5;                                // 점 지름(px) — 이보다 작아지면 점으로 바뀐다
+
 function drawMap(){
   const s = cam.s * DPR;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -495,6 +522,17 @@ function drawMap(){
       if(on){ ctx.strokeStyle = COL.selLine; ctx.lineWidth = 1.6 / s * DPR; }
       ctx.stroke(sh.path);
       if(on){ ctx.strokeStyle = COL.line; ctx.lineWidth = 0.7 / s * DPR; }
+    }
+  }
+  // 작은 섬나라가 아예 안 보이지 않도록 점으로라도 찍어 준다
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  for(const t of TINY){
+    if(t.big * cam.s >= DOT) continue;         // 이미 눈에 보일 만큼 크게 그려졌다
+    ctx.fillStyle = t.id === selected ? COL.sel : COL.land;
+    for(const q of t.pts){
+      const sx = wrapDX(q[0]) * cam.s * DPR, sy = (q[1] - cam.y) * cam.s * DPR;
+      if(sx < 0 || sy < 0 || sx > cv.width || sy > cv.height) continue;
+      ctx.beginPath(); ctx.arc(sx, sy, DOT/2 * DPR, 0, 6.2832); ctx.fill();
     }
   }
 }
@@ -1270,7 +1308,7 @@ function matchDone(){
 // 손가락으로 누를 수 있을 만큼 큰 나라만 냅니다
 const FIND_POOL = COUNTRIES.filter(c => QUIZ_CC.indexOf(c.cc) >= 0 && c.b
   && (c.b[2] - c.b[0]) >= 4 && (c.b[3] - c.b[1]) >= 2.5);
-let findList = [], findNo = 0, findOn = false;
+let findList = [], findNo = 0, findOn = false, findHint = 0, findMiss = 0;
 
 function startFind(){
   findList = shuffle([...FIND_POOL]).slice(0, 5); findNo = 0; findOn = true;
@@ -1278,6 +1316,7 @@ function startFind(){
   $('menuBtn').classList.add('hidden');
   $('mapBtn').classList.remove('hidden');
   $('findBar').classList.remove('hidden');
+  $('hintBtn').classList.remove('hidden');
   $('zoomhint').style.opacity = 0;
   resetCam(); render();
   askFind();
@@ -1287,8 +1326,29 @@ function askFind(){
   const c = findList[findNo];
   $('findText').innerHTML = '<span class="n">' + c.ko + '</span> 어디 있을까요?';
   $('findProg').textContent = (findNo + 1) + ' / ' + findList.length;
+  findHint = 0; findMiss = 0;
   say(eulReul(c.ko) + ' 찾아보세요', 'ko-KR', 'find_' + c.cc);
 }
+
+/* 도와주기 — 누를 때마다 조금씩 더 알려 준다 (몰라서 못 찾고 끝나지 않게) */
+function findHelp(){
+  const c = findList[findNo];
+  if(!c) return;
+  findHint++;
+  if(findHint === 1)                                   // 1단계 · 어느 대륙인지
+    return say(eunNeun(c.ko) + ' ' + c.cont + '에 있어요', 'ko-KR', 'cont_' + c.cc);
+  if(findHint === 2){                                  // 2단계 · 그 근처로 지도를 확대
+    const ts = fitScale() * 3.2;
+    flyTo(c.p[0] - (BW/ts)/2, c.p[1] - (BH/ts)/2, ts, 700);
+    return say(eulReul(c.ko) + ' 찾아보세요', 'ko-KR', 'find_' + c.cc);
+  }
+  let n = 0;                                           // 3단계 · 나라를 노랗게 깜빡인다
+  const t = setInterval(() => {
+    selected = n % 2 ? null : c.id; render();
+    if(++n >= 6){ clearInterval(t); selected = null; render(); }
+  }, 320);
+}
+$('hintBtn').onclick = findHelp;
 function checkFind(id){
   const c = findList[findNo];
   if(id === c.id){
@@ -1300,10 +1360,12 @@ function checkFind(id){
     w.className = 'wrongflash';
     document.body.appendChild(w);
     setTimeout(() => w.remove(), 500);
-    say('다시 찾아보세요', 'ko-KR', 'findagain');
+    if(++findMiss >= 2){ findMiss = 0; setTimeout(findHelp, 700); }   // 자꾸 틀리면 알아서 도와준다
+    else say('다시 찾아보세요', 'ko-KR', 'findagain');
   }
 }
-function endFind(){ findOn = false; $('findBar').classList.add('hidden'); }
+function endFind(){ findOn = false; $('findBar').classList.add('hidden');
+  $('hintBtn').classList.add('hidden'); }
 function findDone(){
   endFind();
   stars++; localStorage.setItem('wm-stars', stars); drawStars();
