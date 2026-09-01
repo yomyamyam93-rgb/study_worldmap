@@ -200,11 +200,26 @@
     gap:16px;padding:calc(env(safe-area-inset-top) + 74px) 14px 18px;overflow:auto}
   .pzwrap{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);
     gap:5px;width:min(440px,88vw);aspect-ratio:3/2}
-  .pz{background-size:300% 200%;background-repeat:no-repeat;border-radius:7px;cursor:pointer;
-    box-shadow:0 2px 6px rgba(0,0,0,.2);transition:transform .12s}
-  .pz.sel{outline:5px solid #ffb01f;outline-offset:-5px;transform:scale(.94)}
+  /* 조각을 넣을 회색 칸 — 몇 번 자리인지 크게 써 둔다 */
+  .pzslot{position:relative;background:#d2dae4;border-radius:7px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    font-size:34px;font-weight:800;color:#9daaba;box-shadow:inset 0 2px 5px rgba(0,0,0,.09)}
+  .pzslot.bad{animation:pzshake .4s;background:#ffc9c9}
+  @keyframes pzshake{25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+  .pz{position:relative;background-size:300% 200%;background-repeat:no-repeat;
+    border-radius:7px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+  .pzslot .pz{position:absolute;inset:0}
+  .pz .no{position:absolute;left:4px;top:3px;font-size:15px;font-weight:800;color:#fff;
+    background:rgba(0,0,0,.55);border-radius:9px;padding:1px 8px}
+  .pz.sel{outline:5px solid #ffb01f;outline-offset:-5px}
+  /* 아직 안 쓴 조각들을 흩뿌려 두는 곳 */
+  .pztray{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;
+    gap:12px;width:min(440px,88vw);min-height:76px}
+  .pztray .pz{width:min(68px,17vw);aspect-ratio:1}
   .pzwrap.done{gap:0}
+  .pzwrap.done .pzslot{background:none;box-shadow:none}
   .pzwrap.done .pz{border-radius:0;box-shadow:none}
+  .pzwrap.done .no{display:none}
 
   /* ── 동물 지도 ── */
   .animal{position:absolute;left:0;top:0;z-index:4;will-change:transform;pointer-events:none;
@@ -340,6 +355,7 @@
     <div class="prog" id="zprog"></div>
     <div class="cq" id="zq"></div>
     <div class="pzwrap" id="pzwrap"></div>
+    <div class="pztray" id="pztray"></div>
   </div>
 
   <div id="passScreen" class="hidden">
@@ -997,15 +1013,16 @@ function sizeDone(){
 
 /* ===== 국기 퍼즐 ===== */
 const PZ_COLS = 3, PZ_ROWS = 2, PZ_N = PZ_COLS * PZ_ROWS;
-let zRound = 0, zOrder = [], zSel = -1, zCountry = null, zLock = false;
+let zRound = 0, zBoard = [], zTray = [], zTilt = [], zSel = -1, zCountry = null, zLock = false;
 
 function startPuzzle(){ zRound = 0; showScreen('puzzleScreen', '🧩 국기 퍼즐'); nextPuzzle(); }
 
 function nextPuzzle(){
   if(zRound >= 3) return puzzleDone();
   zCountry = pick(QUIZ_POOL); zSel = -1; zLock = false;
-  do { zOrder = shuffle([...Array(PZ_N).keys()]); }
-  while(zOrder.every((v, i) => v === i));            // 처음부터 완성되면 다시 섞기
+  zBoard = Array(PZ_N).fill(-1);                     // 칸마다 어떤 조각이 들어갔는지
+  zTray  = shuffle([...Array(PZ_N).keys()]);         // 흩뿌려 둔 조각들
+  zTilt  = zTray.map(() => (Math.random() * 16 - 8).toFixed(1));   // 조금씩 삐뚤게
 
   $('zprog').textContent = (zRound + 1) + ' / 3';
   $('zq').innerHTML = '<b>' + zCountry.ko + '</b> 국기를 맞춰보세요';
@@ -1014,25 +1031,53 @@ function nextPuzzle(){
   say(zCountry.ko + ' 국기를 맞춰보세요', 'ko-KR', 'name_' + zCountry.cc);
 }
 
-function drawPuzzle(){
-  const w = $('pzwrap');
-  w.innerHTML = zOrder.map((piece, slot) => {
-    const col = piece % PZ_COLS, row = (piece - col) / PZ_COLS;
-    return '<div class="pz' + (slot === zSel ? ' sel' : '') + '" data-s="' + slot
-      + '" style="background-image:url(' + flagSrc(zCountry) + ');background-position:'
-      + (col * 100/(PZ_COLS-1)) + '% ' + (row * 100/(PZ_ROWS-1)) + '%"></div>';
-  }).join('');
-  [...w.children].forEach(el => el.onclick = () => tapPiece(+el.dataset.s));
+/* 조각 하나 — 국기의 어느 부분을 보여 줄지와 몇 번인지 */
+function pieceHTML(piece, cls, tilt){
+  const col = piece % PZ_COLS, row = (piece - col) / PZ_COLS;
+  return '<div class="pz' + (cls || '') + '" data-p="' + piece + '" style="'
+    + 'background-image:url(' + flagSrc(zCountry) + ');background-position:'
+    + (col * 100/(PZ_COLS-1)) + '% ' + (row * 100/(PZ_ROWS-1)) + '%'
+    + (tilt ? ';transform:rotate(' + tilt + 'deg)' : '') + '">'
+    + '<span class="no">' + (piece + 1) + '</span></div>';
 }
 
-function tapPiece(slot){
+function drawPuzzle(){
+  const w = $('pzwrap'), tr = $('pztray');
+  w.innerHTML = zBoard.map((piece, slot) =>
+    '<div class="pzslot" data-s="' + slot + '">'
+    + (piece < 0 ? (slot + 1) : pieceHTML(piece)) + '</div>').join('');
+  tr.innerHTML = zTray.map((p, i) =>
+    pieceHTML(p, p === zSel ? ' sel' : '', zTilt[i])).join('');
+  [...w.children].forEach(el => el.onclick = () => tapSlot(+el.dataset.s));
+  [...tr.children].forEach(el => el.onclick = () => tapPiece(+el.dataset.p));
+}
+
+/* 흩뿌려 둔 조각 고르기 */
+function tapPiece(piece){
   if(zLock) return;
-  if(zSel < 0){ zSel = slot; drawPuzzle(); return; }
-  if(zSel === slot){ zSel = -1; drawPuzzle(); return; }
-  const t = zOrder[zSel]; zOrder[zSel] = zOrder[slot]; zOrder[slot] = t;   // 두 조각 자리 바꾸기
-  zSel = -1;
+  zSel = (zSel === piece) ? -1 : piece;
   drawPuzzle();
-  if(zOrder.every((v, i) => v === i)){                                     // 다 맞췄다
+}
+
+/* 회색 칸 누르기 — 같은 번호만 들어간다. 이미 든 조각은 도로 꺼낸다 */
+function tapSlot(slot){
+  if(zLock) return;
+  if(zBoard[slot] >= 0){
+    zTray.push(zBoard[slot]); zTilt.push((Math.random() * 16 - 8).toFixed(1));
+    zBoard[slot] = -1; zSel = -1; drawPuzzle(); return;
+  }
+  if(zSel < 0) return;
+  if(zSel !== slot){                                 // 번호가 안 맞으면 안 들어감
+    const el = $('pzwrap').children[slot];
+    el.classList.add('bad'); setTimeout(() => el.classList.remove('bad'), 420);
+    say('다시 찾아보세요', 'ko-KR', 'findagain');
+    return;
+  }
+  const i = zTray.indexOf(zSel);
+  zTray.splice(i, 1); zTilt.splice(i, 1);
+  zBoard[slot] = zSel; zSel = -1;
+  drawPuzzle();
+  if(zBoard.every(v => v >= 0)){                     // 다 맞췄다
     zLock = true;
     $('pzwrap').classList.add('done');
     $('zq').innerHTML = '🎉 <b>' + zCountry.ko + '</b> 완성!';
@@ -1045,6 +1090,7 @@ function puzzleDone(){
   $('zprog').textContent = '';
   $('zq').innerHTML = '🎉 다 맞췄어요!<br>⭐ 별을 하나 받았어요';
   const w = $('pzwrap');
+  $('pztray').innerHTML = '';
   w.className = 'pzwrap'; w.style.display = 'flex'; w.style.gap = '12px';
   w.style.aspectRatio = 'auto'; w.style.flexWrap = 'wrap';
   w.innerHTML = '<button class="bigbtn go" id="zAgain">🧩 한 번 더</button>'
